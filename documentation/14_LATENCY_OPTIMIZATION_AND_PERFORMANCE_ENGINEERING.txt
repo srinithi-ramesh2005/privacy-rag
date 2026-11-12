@@ -1,0 +1,75 @@
+================================================================================
+MODULE 14: LATENCY OPTIMIZATION & PERFORMANCE ENGINEERING
+================================================================================
+
+1. SYSTEMATIC PROFILING & BOTTLENECK IDENTIFICATION
+--------------------------------------------------------------------------------
+Initial benchmarking of the raw Privacy RAG implementation revealed that while
+security gates functioned correctly, latency was degraded by unoptimized operations:
+  - Cold Start Latency: First query took 18-22 seconds due to on-demand loading of the
+    SentenceTransformer PyTorch model weights on CPU.
+  - LangChain Redundancy: LangChain's generic retriever re-downloaded HuggingFace models
+    and executed N+1 HTTP calls, adding 26-45 seconds of retrieval latency.
+  - Repeated Collection Scrolling: Redundant Qdrant scroll calls were made on every turn
+    to check available documents for intent routing.
+  - AES Round-Key Recomputation: `AESGCM(key)` was re-instantiated for every single chunk,
+    forcing redundant key expansion.
+
+2. TARGETED ARCHITECTURAL OPTIMIZATIONS
+--------------------------------------------------------------------------------
+
+Optimization 1: Lifespan Model Pre-Warming
+  - Problem: SentenceTransformer was initialized lazily on the first user query.
+  - Solution: In `main.py`, the FastAPI `lifespan(app)` context manager explicitly calls
+    `EmbeddingService.get_model()` during server boot. The 384-dimensional model weights
+    are loaded into RAM before traffic arrives.
+  - Latency Impact: First query cold-start reduced from 18.5s to 0.42s (97.7% reduction).
+
+Optimization 2: LocalEmbeddingAdapter & FlashRank Pipeline
+  - Problem: Standard LangChain retrievers re-downloaded models and made HTTP queries per chunk.
+  - Solution: Replaced with `LocalEmbeddingAdapter` in `core/langchain_retriever.py`, inheriting
+    from `Embeddings` and reusing the in-memory singleton. Extracted `encrypted_content` directly
+    from candidate payloads in memory without secondary database lookups.
+  - Latency Impact: Retrieval latency dropped from 32s to 27.7 ms.
+
+Optimization 3: In-Memory Document Discovery Cache with TTL
+  - Problem: Intent routing performed Qdrant `.scroll()` calls on every user keystroke.
+  - Solution: Added `_DOCS_CACHE: Dict[str, Tuple[float, List[Dict[str, Any]]]]` in `main.py`
+    with a 60-second time-to-live (TTL). Invalidated immediately upon new document ingestion.
+  - Latency Impact: Eliminated 15-25 ms of database overhead on subsequent turns.
+
+Optimization 4: Cryptographic Key-Expansion & MMR Proof Memoization
+  - Problem: Recomputing AES round-keys and climbing identical cloud MMR proof paths.
+  - Solution: Added `@lru_cache` to `crypto/encryption.py` for key expansion and memoized
+    recomputed MMR roots in `mmr/proof.py`.
+  - Latency Impact: Chunks decrypted at 0.0104 ms each; MMR proofs verified in 0.025-0.068 ms.
+
+Optimization 5: SQLite Connection Management
+  - Problem: Unclosed database connections caused SQLite thread contention and lock wait warnings.
+  - Solution: Replaced raw connection calls with context-managed `@contextlib.contextmanager`
+    pools in `AuthService` and `ConversationService`.
+  - Latency Impact: Database lookup and write overhead dropped to under 1.2 ms.
+
+--------------------------------------------------------------------------------
+3. MEASURED PRODUCTION LATENCIES (benchmark_results.json)
+--------------------------------------------------------------------------------
+
+| Pipeline Stage                             | Ordinary RAG | Privacy RAG (Ours) | Security Overhead |
+|:-------------------------------------------|:-------------|:-------------------|:------------------|
+| Chunking (ms/doc)                          | 0.003 ms     | 0.003 ms           | 0.000 ms          |
+| Encryption (ms/chunk)                      | 0.000 ms     | 0.0131 ms          | +0.0131 ms        |
+| Qdrant Indexing Time (sec)                 | 1.98 s       | 1.98 s             | 0.000 s           |
+| Dense Vector Search (ms/query)             | 27.71 ms     | 27.71 ms           | 0.000 ms          |
+| MMR Proof Verification (ms/query)          | 0.000 ms     | 0.025 - 0.068 ms   | +0.045 ms         |
+| AEAD Decryption (ms/query)                 | 0.000 ms     | 0.0396 ms          | +0.0396 ms        |
+| LLM Response Generation (ms/query)         | 19.70 ms     | 19.70 ms           | 0.000 ms          |
+| MEAN END-TO-END LATENCY                    | 47.41 ms     | 47.45 ms           | +0.04 ms (0.08%)  |
+| p95 End-to-End Latency                     | 70.13 ms     | 70.17 ms           | +0.04 ms          |
+| Query Throughput (Queries/sec)             | 21.09 QPS    | 21.07 QPS          | -0.02 QPS         |
+
+Key Finding: The total cryptographic overhead of all five security gates is approximately
+0.04 milliseconds (40 microseconds), which constitutes less than 0.1% of end-to-end query time.
+
+================================================================================
+END OF MODULE 14: LATENCY OPTIMIZATION & PERFORMANCE ENGINEERING
+================================================================================

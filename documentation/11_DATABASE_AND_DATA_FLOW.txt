@@ -1,0 +1,94 @@
+================================================================================
+MODULE 11: DATABASE SCHEMA & DATA FLOW ARCHITECTURE
+================================================================================
+
+1. RELATIONAL DATABASE SCHEMA (SQLite: storage_data/auth.db)
+--------------------------------------------------------------------------------
+The relational database manages authentication, RBAC, tenant organization mapping,
+and persistent ChatGPT-like conversation threads.
+
+```
++-------------------------------------------------------------------------------+
+|                                    USERS TABLE                                |
++-----------------------+-------------------+-----------------------------------+
+| Column Name           | Data Type         | Constraints & Purpose             |
++-----------------------+-------------------+-----------------------------------+
+| user_id               | TEXT              | PRIMARY KEY (e.g. usr_architect) |
+| email                 | TEXT              | UNIQUE, NOT NULL                  |
+| username              | TEXT              | Indexed username                  |
+| password_hash         | TEXT              | PBKDF2-HMAC-SHA256 (100,000 iter) |
+| salt                  | TEXT              | 16-byte cryptographic salt (hex)  |
+| full_name             | TEXT              | Display name                      |
+| org_id                | TEXT              | Tenant identifier (default_org)   |
+| role                  | TEXT              | 'admin' or 'member'               |
+| status                | TEXT              | 'approved', 'pending', 'rejected' |
+| otp_code              | TEXT              | 6-digit numeric verification OTP  |
+| created_at            | REAL              | Epoch timestamp (time.time())     |
+| verified_at           | REAL              | Timestamp when OTP verified       |
+| approved_by           | TEXT              | Admin user_id who approved        |
+| approved_at           | REAL              | Timestamp of approval             |
+| auth_provider         | TEXT              | 'local' or 'google'               |
++-----------------------+-------------------+-----------------------------------+
+
++-------------------------------------------------------------------------------+
+|                                CONVERSATIONS TABLE                            |
++-----------------------+-------------------+-----------------------------------+
+| Column Name           | Data Type         | Constraints & Purpose             |
++-----------------------+-------------------+-----------------------------------+
+| conversation_id       | TEXT              | PRIMARY KEY (e.g. conv_09d0c78a)  |
+| user_id               | TEXT              | NOT NULL (owner user_id)          |
+| org_id                | TEXT              | NOT NULL (tenant isolation)       |
+| title                 | TEXT              | Auto-generated descriptive title  |
+| created_at            | REAL              | Epoch creation timestamp          |
+| updated_at            | REAL              | Epoch last-activity timestamp     |
++-----------------------+-------------------+-----------------------------------+
+INDEX: idx_conversations_user_org ON conversations(user_id, org_id, updated_at DESC)
+
++-------------------------------------------------------------------------------+
+|                            CONVERSATION_MESSAGES TABLE                        |
++-----------------------+-------------------+-----------------------------------+
+| Column Name           | Data Type         | Constraints & Purpose             |
++-----------------------+-------------------+-----------------------------------+
+| message_id            | TEXT              | PRIMARY KEY (e.g. msg_347bc96b)   |
+| conversation_id       | TEXT              | FOREIGN KEY -> conversations(id)  |
+| user_id               | TEXT              | NOT NULL                          |
+| role                  | TEXT              | 'user' or 'assistant'             |
+| content               | TEXT              | Full prompt or markdown answer    |
+| metadata_json         | TEXT              | JSON: timing, citations, gates    |
+| created_at            | REAL              | Epoch timestamp                   |
++-----------------------+-------------------+-----------------------------------+
+INDEX: idx_messages_conv_created ON conversation_messages(conversation_id, created_at ASC)
+```
+
+--------------------------------------------------------------------------------
+2. VECTOR DATABASE SCHEMA (Qdrant: org_<id>_collection)
+--------------------------------------------------------------------------------
+Vector storage is physically partitioned by tenant into collections named
+`org_<id>_collection` (e.g. `org_psg_collection`, `org_enterprise_01_collection`).
+
+- Point Structure:
+    - `id`: Integer hash or UUID string.
+    - `vector`: 384-dimensional dense float vector (`bge-small-en-v1.5`), Cosine distance.
+    - `payload`:
+        ```json
+        {
+          "doc_id": "doc_vpn_policy_01",
+          "filename": "Company Security Policy.pdf",
+          "chunk_index": 0,
+          "cluster_id": "5",
+          "encrypted_content": "8b1f4c99a8...",
+          "nonce": "e3a4b91278ff01cd45678912",
+          "chunk_hash": "5f4dcc3b5aa765d61d8327deb882cf992b9699aabbcc...",
+          "leaf_hash": "a1b2c3d4e5f6...",
+          "proof_path": "[{\"sibling\": \"...\", \"direction\": \"right\"}]",
+          "enterprise_root": "7c9e8a1b2c3d4e5f6a7b8c9d0e1f2a3b...",
+          "org_id": "psg",
+          "user_id": "usr_architect_psg_655732"
+        }
+        ```
+
+Notice: Neither the raw chunk text nor the plaintext tokens are ever stored in Qdrant.
+
+================================================================================
+END OF MODULE 11: DATABASE SCHEMA & DATA FLOW ARCHITECTURE
+================================================================================

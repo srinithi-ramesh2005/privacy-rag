@@ -1,0 +1,154 @@
+================================================================================
+MODULE 06: DOCUMENT INGESTION & INDEXING ARCHITECTURE
+================================================================================
+
+1. COMPLETE 25-STAGE DOCUMENT INGESTION PIPELINE
+--------------------------------------------------------------------------------
+Document ingestion converts raw PDF/text files into encrypted, integrity-proven,
+and vector-indexed payloads. The pipeline executes in 25 distinct stages:
+
+[Stage 1: Document Upload]
+  The client submits a multipart form (`POST /api/v1/ingest`) containing the file, `org_id`,
+  and authenticated `user_id`. Handled in `main.py` lines 800-840.
+
+[Stage 2: File Validation]
+  File extension and MIME type are inspected. Rejects non-PDF/unsupported files with HTTP 400.
+
+[Stage 3: Format Detection]
+  Detects binary PDF signatures (`%PDF-`) to prevent file extension spoofing.
+
+[Stage 4: Text Extraction]
+  `PyPDF` (`pypdf.PdfReader`) iterates through pages, extracting raw text strings.
+
+[Stage 5: Metadata Extraction]
+  Extracts document title, page count, document identifier (`doc_id`), and ingestion timestamp.
+
+[Stage 6: Image / Diagram Handling]
+  Images are currently skipped; textual captions and surrounding text are preserved.
+
+[Stage 7: OCR Evaluation]
+  Evaluates whether extracted text length meets minimum threshold. If scanned PDF is detected,
+  flags requirement for OCR pipeline.
+
+[Stage 8: Document Preprocessing]
+  Normalizes unicode formatting (NFKD normalization), strips null bytes and invalid characters.
+
+[Stage 9: Cleaning & Whitespace Normalization]
+  Collapses multiple spaces, tabs, and redundant line-breaks while preserving paragraph bounds.
+
+[Stage 10: Chunking]
+  Splits text into chunks of target size (typically 500 characters / ~120 tokens) with overlap.
+
+[Stage 11: Chunk Overlap Application]
+  Applies a sliding window overlap (typically 50 characters / 10%) between adjacent chunks
+  to ensure semantic continuity across split boundaries.
+
+[Stage 12: Chunk Index Assignment]
+  Assigns a monotonically increasing `chunk_index` (0, 1, 2, ... $N-1$) and unique `chunk_id`
+  (`doc_{id}_chunk_{index}`).
+
+[Stage 13: Metadata Binding]
+  Binds `doc_id`, `filename`, `page_number`, `org_id`, and `user_id` to each chunk record.
+
+[Stage 14: Embedding Generation]
+  Generates 384-dimensional dense vector embeddings using `EmbeddingService.generate_embedding()`
+  backed by `BAAI/bge-small-en-v1.5`. Vectors are L2-normalized.
+
+[Stage 15: Voronoi Cluster Assignment]
+  Computes Euclidean distance between chunk embedding $\mathbf{v}$ and pre-calculated IVF centroids
+  `ivf_centroids.npy` ($C_0, C_1, \dots, C_{k-1}$):
+    $$k^* = \arg\min_k \|\mathbf{v} - \mathbf{c}_k\|_2$$
+  Assigns `cluster_id` ($k^*$) to the chunk.
+
+[Stage 16: Payload Encryption]
+  Encrypts chunk plaintext using AES-256-GCM authenticated encryption (`AESGCM`).
+
+[Stage 17: Cryptographic Nonce Generation]
+  Generates a cryptographically secure 12-byte (96-bit) initialization vector (IV / Nonce)
+  using `os.urandom(12)`. Nonces are unique for every single chunk.
+
+[Stage 18: Authentication Tag Generation]
+  AES-256-GCM computes a 16-byte (128-bit) GMAC authentication tag during encryption.
+
+[Stage 19: Ciphertext Serialization]
+  Ciphertext bytes and tag are concatenated and Base64-encoded to form `encrypted_content`.
+
+[Stage 20: SHA-256 Content Hashing]
+  Computes the cryptographic digest of the chunk plaintext:
+    $$h_{\text{chunk}} = \text{SHA-256}(\text{plaintext})$$
+
+[Stage 21: Merkle Leaf Derivation]
+  Constructs MMR leaf object containing `chunk_hash`, `chunk_id`, and `doc_id`:
+    $$L_i = \text{SHA-256}(i \mathbin{\|} h_{\text{chunk}} \mathbin{\|} \text{doc\_id})$$
+
+[Stage 22: Two-Tier MMR Tree Construction]
+  Appends $L_i$ to the User/Document MMR tree, calculates peak hashes, and submits peaks to the
+  Enterprise Cloud MMR tree (`mmr/cloud_mmr.py`).
+
+[Stage 23: Cloud Enterprise Root Generation & Proof Path Computation]
+  Cloud MMR computes the immutable Enterprise Root Hash:
+    $$R_{\text{enterprise}} = \text{BagPeaks}(P_1, P_2, \dots, P_m)$$
+  Generates Merkle inclusion proof paths for each leaf.
+
+[Stage 24: Vector Database Indexing (Qdrant)]
+  Constructs Qdrant point objects:
+    - ID: Integer or UUID hash.
+    - Vector: 384-dimensional float array.
+    - Payload: `{encrypted_content, nonce, cluster_id, chunk_hash, proof_path, enterprise_root, org_id}`
+  Executes bulk upsert into `org_<id>_collection`. Notice: Plaintext is NEVER stored in Qdrant!
+
+[Stage 25: Document Status Tracking & Cache Invalidation]
+  Records document status as `INDEXED` in metadata tracking. Invalidates in-memory document discovery
+  cache (`_DOCS_CACHE`) so new documents are immediately retrievable.
+
+--------------------------------------------------------------------------------
+2. WORKED SAMPLE: TRACING A CHUNK THROUGH INGESTION
+--------------------------------------------------------------------------------
+Input Document: "Company Security Policy - VPN Rotation"
+Target Org: "psg"
+
+1. Plaintext Chunk:
+   "VPN credentials must be rotated every 90 days. Passwords must be at least 16 characters long."
+   Length: 95 bytes.
+
+2. Embedding Generation (BAAI/bge-small-en-v1.5):
+   Vector: [0.0341, -0.0892, 0.0112, ..., -0.0451] (384 float32 numbers)
+
+3. Voronoi Cluster Assignment:
+   Nearest Centroid: Centroid #5 (Euclidean distance = 0.612) -> cluster_id = "5"
+
+4. Encryption (AES-256-GCM):
+   Key (256-bit): 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+   Nonce (12 bytes): e3a4b91278ff01cd45678912
+   Ciphertext + Tag (111 bytes): 8b1f4c99a8... (Base64 encoded string)
+
+5. SHA-256 Hashing:
+   h_chunk = "5f4dcc3b5aa765d61d8327deb882cf992b9699aabbcc1234567890abcdef1234"
+
+6. MMR Leaf & Proof Path:
+   Leaf #0: "a1b2c3d4e5f6..."
+   Proof Path: [{"sibling": "d4e5f6...", "direction": "right"}]
+   Enterprise Root: "7c9e8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f"
+
+7. Qdrant Payload Record:
+   {
+     "id": 1001,
+     "vector": [0.0341, -0.0892, ...],
+     "payload": {
+       "doc_id": "doc_vpn_policy",
+       "chunk_index": 0,
+       "cluster_id": "5",
+       "encrypted_content": "8b1f4c99a8...",
+       "nonce": "e3a4b91278ff01cd45678912",
+       "chunk_hash": "5f4dcc3b5aa765d61d8327deb882cf992b9699aabbcc1234567890abcdef1234",
+       "proof_path": "[...]",
+       "enterprise_root": "7c9e8a1b2c3d...",
+       "org_id": "psg"
+     }
+   }
+
+Result: Secure, zero-plaintext storage in Qdrant with complete mathematical proof of inclusion.
+
+================================================================================
+END OF MODULE 06: DOCUMENT INGESTION & INDEXING
+================================================================================

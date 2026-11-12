@@ -1,0 +1,87 @@
+================================================================================
+MODULE 20: SOURCE CODE REFERENCE & TECHNICAL GLOSSARY
+================================================================================
+
+1. FILE-BY-FILE TECHNICAL INVENTORY
+--------------------------------------------------------------------------------
+
+File: `main.py`
+  - Role: Primary FastAPI application entry point, lifecycle manager, and API router.
+  - Key Classes/Functions:
+      - `lifespan(app)`: Pre-warms SentenceTransformer embedding model into RAM.
+      - `query_and_verify_endpoint()`: Coordinates the 28-stage query verification pipeline.
+      - `ingest_document_endpoint()`: Coordinates the 25-stage document ingestion workflow.
+  - Inward Dependencies: Calls `core/`, `crypto/`, `database/`, `mmr/`, `verification/`.
+
+File: `config/settings.py`
+  - Role: Centralized environment variable and configuration manager.
+  - Key Classes: `Settings(BaseSettings)` with singleton `get_settings()`.
+
+File: `core/auth_service.py`
+  - Role: Multi-tenant user identity, PBKDF2-HMAC-SHA256 password hashing, and admin approval.
+  - Key Methods:
+      - `authenticate(identifier, password)`: Verifies username/email and salt.
+      - `canonicalize_org(org_id)`: Maps tenant aliases (`org1`, `psg`) to canonical keys.
+      - `register_user()`, `verify_otp()`, `approve_user()`.
+
+File: `core/conversation_service.py`
+  - Role: Persistent SQLite chat memory, tenant isolation, and session CRUD.
+  - Key Methods:
+      - `resolve_user_ids(identifier)`: Resolves username, user_id, and email variants.
+      - `create_conversation()`, `list_conversations()`, `get_messages()`.
+      - `auto_title_from_query()`: Generates concise descriptive conversation titles.
+
+File: `core/retrieval_router.py`
+  - Role: Natural language intent parsing, multi-lingual extraction, and pronoun resolution.
+  - Key Methods: `RetrievalRouter.analyze()`, `resolve_follow_up_references()`.
+
+File: `core/hybrid_reranker.py`
+  - Role: Reciprocal Rank Fusion (RRF), Cross-Encoder scoring, and context expansion.
+  - Key Methods: `execute_advanced_retrieval_pipeline()`, `expand_and_stitch_context()`.
+
+File: `core/cross_encoder_reranker.py`
+  - Role: Wraps `cross-encoder/ms-marco-MiniLM-L-6-v2` for cross-attention scoring.
+
+File: `core/context_optimizer.py`
+  - Role: Reorders context chunks to place highest-scoring text at beginning and end.
+
+File: `core/corrective_rag.py`
+  - Role: Evaluates retrieval quality (Correct/Ambiguous/Incorrect) and Self-RAG reflection tokens.
+
+File: `crypto/encryption.py`
+  - Role: NIST AES-256-GCM authenticated encryption and decryption.
+  - Key Methods: `AESGCMEncryption.encrypt()`, `decrypt()`.
+
+File: `mmr/core.py`, `cloud_mmr.py`, `proof.py`
+  - Role: Mathematical implementation of Two-Tier Merkle Mountain Range and inclusion proofs.
+
+File: `verification/boundary_validation.py`
+  - Role: Gate 3 Dynamic Boundary Verification (DBV) using IVF Voronoi cell geometry.
+
+File: `verification/hallucination.py`
+  - Role: Gate 5 Hallucination Checker. Evaluates token overlap and grounding ratios.
+
+--------------------------------------------------------------------------------
+2. TECHNICAL GLOSSARY OF ABBREVIATIONS & CONCEPTS
+--------------------------------------------------------------------------------
+- ACL: Access Control List. Multi-tenant authorization barrier enforcing tenant boundaries.
+- AEAD: Authenticated Encryption with Associated Data (AES-256-GCM).
+- ANN: Approximate Nearest Neighbor. Sub-linear vector search algorithm.
+- CE: Cross-Encoder. Transformer model processing query and document simultaneously.
+- CRAG: Corrective Retrieval-Augmented Generation. Evaluates retrieval quality prior to synthesis.
+- DBV: Dynamic Boundary Verification. Geometric validation of Voronoi cluster coverage.
+- GMAC: Galois Message Authentication Code. 128-bit integrity tag in AES-GCM.
+- HNSW: Hierarchical Navigable Small World. Multi-layer proximity graph for vector search.
+- HyDE: Hypothetical Document Embeddings.
+- IVF: Inverted File Index. Vector clustering using Voronoi partitioning.
+- MMR: Merkle Mountain Range (Cryptographic). Append-only binary Merkle tree structure.
+- Nonce: Number Used Once. 96-bit unique initialization vector for AES-GCM.
+- P@K: Precision at K. Fraction of top-$K$ retrieved chunks that are relevant.
+- R@K: Recall at K. Fraction of all relevant chunks successfully retrieved.
+- RRF: Reciprocal Rank Fusion. Rank-based ensemble merging technique.
+- Self-RAG: Self-Reflective Retrieval-Augmented Generation.
+- Zero-Trust: Security architecture requiring every request and data chunk to be verified.
+
+================================================================================
+END OF MODULE 20: SOURCE CODE REFERENCE & TECHNICAL GLOSSARY
+================================================================================

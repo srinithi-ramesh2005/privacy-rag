@@ -1,0 +1,114 @@
+================================================================================
+MODULE 07: QUERY PROCESSING & VERIFICATION WORKFLOW
+================================================================================
+
+1. COMPLETE 28-STAGE QUERY EXECUTION PIPELINE
+--------------------------------------------------------------------------------
+When a user submits a prompt, it traverses a deterministic 28-stage pipeline in
+`main.py` (`query_and_verify_endpoint`) lines 1230-1840:
+
+[Stage 1: User Query Submission]
+  Client sends JSON payload (`POST /api/v1/query-verify`):
+  `{query_text, user_id, org_id, conversation_id, simulate_missing_cluster, simulate_integrity_failure}`
+
+[Stage 2: Authentication & Token Extraction]
+  Extracts Bearer JWT token from `Authorization` header. Verifies PBKDF2 user session.
+
+[Stage 3: Identity & Tenant Resolution]
+  `ConversationService.resolve_user_ids()` and `resolve_org_ids()` map username, email, and
+  aliases to canonical `user_id` and `org_id`.
+
+[Stage 4: Gate 1: Multi-Tenant ACL Verification]
+  Validates whether `user_id` is an approved member of `org_id` via `AuthService.get_user()`.
+  If unauthorized -> Halts with `ACL_VIOLATION`.
+
+[Stage 5: Persistent Conversation Session Resolution]
+  If `conversation_id` is missing -> Automatically creates persistent conversation with auto-title.
+  If present -> Validates ownership.
+
+[Stage 6: Conversation History Retrieval]
+  Retrieves past turns from SQLite `conversation_messages` to supply multi-turn context.
+
+[Stage 7: User Message Persistence]
+  Commits current user query to SQLite `conversation_messages` table immediately.
+
+[Stage 8: Document Discovery Cache Lookup]
+  Checks in-memory `_DOCS_CACHE` (60s TTL) for available documents in target tenant to avoid
+  redundant Qdrant collection scrolls.
+
+[Stage 9: Dynamic Intent & Instruction Routing]
+  `RetrievalRouter.analyze()` inspects query for language (Tamil, Thanglish, English),
+  style (beginner, technical), format (table, bullets), length, and negative constraints.
+
+[Stage 10: Multi-Turn Pronoun & Follow-Up Resolution]
+  `RetrievalRouter` resolves relative queries (e.g. "Explain that again in Tamil", "What about point 2?")
+  against preceding assistant messages and target documents.
+
+[Stage 11: Query Transformation & Expansion]
+  `QueryTransformer.generate_query_variations()` produces search expansions for broad queries.
+
+[Stage 12: Query Embedding Generation]
+  `EmbeddingService.generate_embedding()` generates 384-dimensional query vector $\mathbf{q}$
+  using pre-warmed `bge-small-en-v1.5`.
+
+[Stage 13: Dense Vector Similarity Retrieval (Qdrant)]
+  Qdrant searches `org_<id>_collection` using cosine similarity, returning top candidate points
+  filtered strictly by `org_id`.
+
+[Stage 14: Gate 3 Dynamic Boundary Verification (DBV)]
+  `BoundaryValidator.evaluate_retrieval()` matches retrieved point `cluster_id` against mandatory
+  Voronoi cells. If clusters omitted -> Halts with `IVF_BOUNDARY_INCOMPLETENESS`.
+
+[Stage 15: Gate 2 Cryptographic MMR Integrity Verification]
+  For every candidate point, extracts `proof_path`, `leaf_hash`, and `chunk_hash`.
+  `UserMMR.verify_inclusion()` recalculates Merkle peak hash against `enterprise_root`.
+  If tampered -> Halts with `MMR_TAMPERED`.
+
+[Stage 16: Gate 4 Authenticated AEAD Decryption]
+  If Gates 1, 2, and 3 pass:
+  `AESGCM.decrypt(nonce, ciphertext_with_tag, associated_data)` decrypts chunks to plaintext.
+  Any corrupted nonce or tag fails authentication.
+
+[Stage 17: Candidate Ranking & Filtering]
+  Filters decrypted chunks by minimum similarity score threshold (default 0.35).
+
+[Stage 18: LangChain FlashRank Document Compression]
+  If LangChain retriever enabled: `FlashrankRerank` extracts top compressed text hits.
+
+[Stage 19: Reciprocal Rank Fusion (RRF)]
+  `HybridReranker.execute_advanced_retrieval_pipeline()` fuses dense similarity rank and
+  lexical scores ($k=60, \alpha=0.60$).
+
+[Stage 20: Cross-Encoder Re-scoring]
+  `CrossEncoderReranker.predict()` scores query-chunk pairs with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
+
+[Stage 21: Context Expansion & Stitching]
+  If document has adjacent chunks, stitches neighboring context up to 6,000 characters.
+
+[Stage 22: Lost-in-the-Middle Context Reordering]
+  `ContextOptimizer.optimize_context_for_llm()` places top-scoring chunks at beginning and end.
+
+[Stage 23: Corrective RAG (CRAG) Retrieval Grading]
+  `CorrectiveRAGEngine.grade_retrieval()` classifies retrieval confidence (Correct / Ambiguous / Incorrect).
+
+[Stage 24: Conversational System Prompt Construction]
+  Injects verified context, multi-turn history, dynamic intent rules (language, tone, format),
+  and anti-hallucination directives into LLM prompt.
+
+[Stage 25: LLM Generative Inference]
+  Calls Groq Cloud API (Llama-3.3-70B-Versatile / gpt-oss-120b) with temperature 0.1, or local synthesizer.
+
+[Stage 26: Gate 5 Semantic Grounding & Self-RAG Reflection]
+  `HallucinationChecker.evaluate()` calculates token overlap and NLI grounding ratio.
+  Generates `[Is-Relevant]`, `[Is-Supported]`, and `[Is-Useful]` reflection metrics.
+
+[Stage 27: Assistant Turn Persistence]
+  Commits assistant answer, timing breakdown, and 5-gate audit report to SQLite `conversation_messages`.
+
+[Stage 28: Client Response Delivery & Audit Rendering]
+  Returns `VerificationResponse` JSON. Frontend displays verified markdown answer, compact retrieval
+  chips (`#1 · Cluster 5`), and updates the top-right Security Verification inspector.
+
+================================================================================
+END OF MODULE 07: QUERY PROCESSING & VERIFICATION WORKFLOW
+================================================================================

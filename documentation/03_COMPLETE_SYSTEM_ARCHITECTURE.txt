@@ -1,0 +1,90 @@
+================================================================================
+MODULE 03: COMPLETE SYSTEM ARCHITECTURE & BLUEPRINTS
+================================================================================
+
+1. HIGH-LEVEL ARCHITECTURAL BLUEPRINT
+--------------------------------------------------------------------------------
+The Privacy RAG system is engineered as an Asymmetric Verifiable RAG architecture.
+It separates the storage of vector indices from the cryptographic verification of data.
+
+```
++-------------------------------------------------------------------------------+
+|                             CLIENT / PRESENTATION TIER                        |
+|   +-----------------------------------------------------------------------+   |
+|   |   HTML5 / CSS3 / Vanilla JS SPA (static/index.html & static/app.js)  |   |
+|   |   - ChatGPT-like Conversation Thread      - Pinned Bottom Query Input |   |
+|   |   - Collapsible Conversation History      - Security Verification Mod |   |
+|   |   - Light/Dark Mode Immediate Switcher    - Compact Retrieval Badges  |   |
+|   +-----------------------------------------------------------------------+   |
++---------------------------------------+---------------------------------------+
+                                        | HTTP REST / JSON API (Port 8000)
++---------------------------------------v---------------------------------------+
+|                         APPLICATION & VERIFICATION GATEWAY                     |
+|                               (FastAPI Backend)                               |
+|   +-----------------------------------------------------------------------+   |
+|   | 1. Dynamic Retrieval & Intent Router (core/retrieval_router.py)       |   |
+|   |    - Extracts language, style, length, format, negative constraints   |   |
+|   |    - Resolves multi-turn follow-up pronouns and references            |   |
+|   +-----------------------------------------------------------------------+   |
+|   | 2. 5-GATE ZERO-TRUST VERIFICATION PIPELINE                            |   |
+|   |    [Gate 1] Multi-Tenant ACL Gate (core/auth_service.py)              |   |
+|   |    [Gate 2] Two-Tier MMR Cryptographic Integrity (mmr/core.py)        |   |
+|   |    [Gate 3] Dynamic Boundary Verification (verification/boundary_val) |   |
+|   |    [Gate 4] Authenticated AEAD Decryption (crypto/encryption.py)      |   |
+|   |    [Gate 5] Semantic Grounding & Self-RAG (verification/hallucination)|   |
+|   +-----------------------------------------------------------------------+   |
+|   | 3. Advanced Context Optimization & Hybrid Reranker                    |   |
+|   |    - Reciprocal Rank Fusion (RRF, alpha=0.60)                         |   |
+|   |    - Cross-Encoder Re-scoring (cross-encoder/ms-marco-MiniLM-L-6-v2)  |   |
+|   |    - Lost-in-the-Middle Context Reordering (core/context_optimizer.py)|   |
+|   +-----------------------------------------------------------------------+   |
+|   | 4. LLM Response Synthesizer (core/llm_service.py)                     |   |
+|   |    - Groq Llama-3.3-70B-Versatile / OpenAI gpt-oss-120b               |   |
+|   |    - Intelligent Zero-Cost Local Extractive/Abstractive Fallback      |   |
+|   +-----------------------------------------------------------------------+   |
++-------------------+---------------------------------------+-------------------+
+                    |                                       |
++-------------------v-------------------+   +---------------v-------------------+
+|          PERSISTENT STORAGE TIER      |   |         VECTOR DATABASE TIER      |
+|                                       |   |                                   |
+|   +-------------------------------+   |   |   +---------------------------+   |
+|   | SQLite DB (storage_data/auth) |   |   |   | Qdrant Vector Engine      |   |
+|   | - users (PBKDF2 passwords)    |   |   |   | (Local Container / :6333) |   |
+|   | - conversations               |   |   |   | - org_psg_collection      |   |
+|   | - conversation_messages       |   |   |   | - org_enterprise_01_coll  |   |
+|   +-------------------------------+   |   |   | Stores:                   |   |
+|   | MMR Blob Store                |   |   |   | - 384-dim Dense Vectors   |   |
+|   | (storage_data/mmr_blobs/)     |   |   |   | - AES-256-GCM Ciphertext  |   |
+|   | - Leaf hashes, MMR tree nodes |   |   |   | - Nonces, Tags, Hashes    |   |
+|   +-------------------------------+   |   |   +---------------------------+   |
++---------------------------------------+   +-----------------------------------+
+```
+
+2. PHYSICAL LAYER ARCHITECTURE
+--------------------------------------------------------------------------------
+1. Web Client: Modern browser executing clientside DOM operations, state management,
+   and theme rendering without Node.js dependencies.
+2. Web & API Server: Python 3.13 / FastAPI process running on `http://localhost:8000`.
+   Manages routing, cryptographic proofs, and pipeline coordination.
+3. Vector Database Service: Qdrant service running on port 6333 (HTTP) and 6334 (gRPC).
+   Maintains HNSW and IVF vector indices with encrypted payloads.
+4. Relational Database: SQLite 3 engine accessing `storage_data/auth.db` via transactional
+   context managers with connection timeout controls.
+5. Machine Learning Models:
+   - Primary Embedding Model: `BAAI/bge-small-en-v1.5` (384 dimensions, ~133 MB).
+   - Reranking Cross-Encoder: `cross-encoder/ms-marco-MiniLM-L-6-v2` (~80 MB).
+   - Document Compressor: `FlashrankRerank` (Rank-1 context compression).
+   - Primary Generative LLM: Groq Cloud API hosting Llama-3.3-70B-Versatile.
+
+3. ARCHITECTURAL SEPARATION OF CONCERNS
+--------------------------------------------------------------------------------
+- Ingestion Separation: Ingestion parses, chunks, encrypts, and builds MMR trees once.
+  Once committed, the cloud enterprise root is signed and stored.
+- Retrieval Decoupling: Vector retrieval locates candidate IDs based on mathematical
+  similarity in embedding space. The vector store cannot read document content.
+- Verification Isolation: Verification is executed by client/server verifiers before
+  plaintext is reconstructed. Decryption keys never reside on the vector database server.
+
+================================================================================
+END OF MODULE 03: COMPLETE SYSTEM ARCHITECTURE
+================================================================================

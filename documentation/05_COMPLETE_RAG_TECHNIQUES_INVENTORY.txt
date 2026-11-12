@@ -1,0 +1,154 @@
+================================================================================
+MODULE 05: COMPLETE RAG TECHNIQUES INVENTORY & CLASSIFICATION
+================================================================================
+
+1. COMPREHENSIVE RAG TECHNIQUES AUDIT
+--------------------------------------------------------------------------------
+This document catalogs every retrieval, indexing, generation, and ranking technique
+examined during the architectural audit of the codebase. Every technique is classified
+honestly based on whether it is fully implemented, partially implemented, planned, or absent.
+
+Status Definitions:
+  - IMPLEMENTED: Code exists in core/ or verification/ and is actively executed in the pipeline.
+  - PARTIAL: Elementary logic or data structures exist, but full generalized automation is limited.
+  - NOT IMPLEMENTED / ABSENT: Technique is not used in this project.
+  - PLANNED: Documented design target, not present in the runtime codebase.
+
+--------------------------------------------------------------------------------
+A. RETRIEVAL & SEARCH TECHNIQUES INVENTORY
+--------------------------------------------------------------------------------
+
+1. Dense Vector Retrieval
+   - Meaning: Representing textual queries and document chunks as continuous vectors in a dense
+     embedding space and finding the nearest neighbors using vector similarity.
+   - Purpose: Captures semantic meaning, synonyms, and conceptual intent beyond keyword matching.
+   - Project Implementation: Implemented using `BAAI/bge-small-en-v1.5` (384 dimensions) via
+     SentenceTransformers and Qdrant vector database (`database/qdrant_repository.py`).
+   - Formula: Cosine Similarity:
+       $$\text{Sim}(q, d) = \frac{\mathbf{q} \cdot \mathbf{d}}{\|\mathbf{q}\|_2 \|\mathbf{d}\|_2}$$
+   - Status: IMPLEMENTED (core/embedding_service.py, database/qdrant_repository.py)
+
+2. Approximate Nearest Neighbor (ANN) Search
+   - Meaning: Sub-linear search algorithms that balance precision and recall to find near-optimal
+     vector matches across high-dimensional datasets without scanning every vector ($O(\log N)$ vs $O(N)$).
+   - Project Implementation: Executed by Qdrant's internal HNSW (Hierarchical Navigable Small World)
+     and IVF graph index.
+   - Status: IMPLEMENTED (database/qdrant_client.py)
+
+3. Dynamic Boundary Verification (DBV) via Voronoi Partitioning
+   - Meaning: Geometric verification of IVF cluster coverage ensuring that search boundaries did not
+     probabilistically omit clusters that intersect the query neighborhood.
+   - Purpose: Mitigates "Omission Attacks" and boundary truncation in ANN vector indices.
+   - Project Implementation: Centroids and radii saved in `ivf_centroids.npy` and `ivf_radii.npy`
+     are validated against query distance to verify mandatory Voronoi cells were probed.
+   - Status: IMPLEMENTED (verification/boundary_validation.py, Gate 3)
+
+4. Metadata Filtering & Tenant Isolation
+   - Meaning: Restricting vector retrieval to points matching explicit metadata attributes (e.g. `org_id`).
+   - Purpose: Prevents cross-tenant data leaks and accelerates search by filtering prior to ranking.
+   - Project Implementation: Qdrant payload filters using `models.Filter(must=[FieldCondition(key="org_id", match=...)])`
+     and isolated Qdrant collections per organization (`org_<id>_collection`).
+   - Status: IMPLEMENTED (database/qdrant_repository.py)
+
+5. Multi-Query Expansion & Decomposition
+   - Meaning: Generating alternative phrasings, sub-questions, or expanded terms for an ambiguous query.
+   - Purpose: Increases recall by capturing different vocabulary variants of the user prompt.
+   - Project Implementation: `QueryTransformer.generate_query_variations()` generates multi-perspective
+     expansions; `RetrievalRouter.decompose_query()` splits combined instructions.
+   - Status: IMPLEMENTED (core/query_transformation.py, core/retrieval_router.py)
+
+6. Contextual Compression & FlashRank
+   - Meaning: Filtering and compressing retrieved chunks before passing them to the generator model.
+   - Project Implementation: Integrated via `FlashrankRerank` in `core/langchain_retriever.py` to extract
+     the top-performing text snippets.
+   - Status: IMPLEMENTED (core/langchain_retriever.py)
+
+7. Sparse Retrieval (BM25 / TF-IDF)
+   - Meaning: Inverted-index keyword search based on term frequency and inverse document frequency.
+   - Status: NOT IMPLEMENTED directly (dense retrieval + cross-encoder reranking used instead).
+
+8. Parent-Child / Hierarchical Chunk Retrieval
+   - Meaning: Storing small chunks for search but retrieving the larger parent document for context.
+   - Status: PARTIAL (Context stitcher in `core/hybrid_reranker.py` stitches adjacent chunk indices
+     `chunk_index - 1` and `chunk_index + 1` from the same document up to 6,000 characters).
+
+--------------------------------------------------------------------------------
+B. ADVANCED RAG TECHNIQUES INVENTORY
+--------------------------------------------------------------------------------
+
+1. Corrective RAG (CRAG)
+   - Meaning: Evaluating the quality and relevance of retrieved documents using a retrieval grader
+     to categorize context as Correct, Ambiguous, or Incorrect prior to synthesis.
+   - Project Implementation: `CorrectiveRAGEngine.grade_retrieval()` in `core/corrective_rag.py`.
+     Computes relevance scores and assigns confidence bounds.
+   - Status: IMPLEMENTED (core/corrective_rag.py)
+
+2. Self-RAG (Self-Reflective RAG)
+   - Meaning: Generating active reflection tokens to evaluate whether retrieved context is relevant,
+     whether the generated answer is supported by evidence, and whether the answer is useful.
+   - Project Implementation: `CorrectiveRAGEngine.generate_self_rag_reflection()` outputs
+     `[Is-Relevant]`, `[Is-Supported]`, and critique reflections stored in the response breakdown.
+   - Status: IMPLEMENTED (core/corrective_rag.py, main.py)
+
+3. Reciprocal Rank Fusion (RRF)
+   - Meaning: An ensemble ranking algorithm that merges ranked lists from multiple search passes
+     without requiring normalized score distributions.
+   - Formula:
+       $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}$$
+     where $k=60$ is a smoothing constant and $r_m(d)$ is the rank of document $d$ in system $m$.
+   - Project Implementation: Implemented in `HybridReranker.execute_advanced_retrieval_pipeline()`
+     fusing vector similarity with cross-attention scores.
+   - Status: IMPLEMENTED (core/hybrid_reranker.py)
+
+4. Cross-Encoder Reranking
+   - Meaning: Passing query-document pairs simultaneously through a full cross-attention transformer
+     model (`ms-marco-MiniLM-L-6-v2`) to capture deep token-level interactions.
+   - Status: IMPLEMENTED (core/cross_encoder_reranker.py)
+
+5. Lost-in-the-Middle Context Reordering
+   - Meaning: Strategically placing the highest-scoring chunks at the extreme beginning and end of the
+     assembled prompt context to combat LLM attention degradation in long contexts.
+   - Status: IMPLEMENTED (core/context_optimizer.py)
+
+6. Graph RAG (Knowledge Graph Triples)
+   - Meaning: Extracting entity-relation-entity knowledge graph triples to perform multi-hop graph walks.
+   - Status: NOT IMPLEMENTED (Honest audit: The codebase does not contain Neo4j, NetworkX graph stores,
+     or graph traversal logic).
+
+7. RAPTOR (Recursive Abstractive Processing for Tree-Organized Retrieval)
+   - Meaning: Recursively clustering and summarizing chunks into a multi-tier tree structure.
+   - Status: NOT IMPLEMENTED in current codebase.
+
+8. HyDE (Hypothetical Document Embeddings)
+   - Meaning: Using an LLM to generate a hypothetical answer document, embedding that hypothetical
+     answer, and retrieving real documents closest to it.
+   - Status: PARTIALLY IMPLEMENTED (Hypothetical query expansion terms generated in `query_transformation.py`).
+
+--------------------------------------------------------------------------------
+C. CONSOLIDATED TECHNIQUES COMPARISON MATRIX
+--------------------------------------------------------------------------------
+
+| Technique Name              | Abbr. | Category            | Implemented in Project? | File Location                     |
+|:----------------------------|:------|:--------------------|:------------------------|:----------------------------------|
+| Dense Vector Retrieval      | DVR   | Core Retrieval      | YES                     | core/embedding_service.py         |
+| Approximate Nearest Neighbor| ANN   | Vector Indexing     | YES                     | database/qdrant_client.py         |
+| Dynamic Boundary Verif.     | DBV   | Security Retrieval  | YES                     | verification/boundary_validation  |
+| Two-Tier Merkle Mtn Range   | MMR   | Cryptographic Gate  | YES                     | mmr/core.py, mmr/cloud_mmr.py     |
+| AES-256-GCM AEAD Decrypt    | AEAD  | Cryptographic Gate  | YES                     | crypto/encryption.py              |
+| Multi-Tenant ACL            | ACL   | Access Security     | YES                     | core/auth_service.py              |
+| Corrective RAG              | CRAG  | Advanced RAG        | YES                     | core/corrective_rag.py            |
+| Self-Reflective RAG         | S-RAG | Advanced RAG        | YES                     | core/corrective_rag.py            |
+| Cross-Encoder Reranking     | CE    | Reranking           | YES                     | core/cross_encoder_reranker.py    |
+| Reciprocal Rank Fusion      | RRF   | Reranking           | YES                     | core/hybrid_reranker.py           |
+| FlashRank Compression       | FR    | Compression         | YES                     | core/langchain_retriever.py       |
+| Lost-in-the-Middle Reorder  | L-M   | Context Management  | YES                     | core/context_optimizer.py         |
+| Context Stitching           | CS    | Context Management  | YES                     | core/hybrid_reranker.py           |
+| Multi-Query Expansion       | MQE   | Query Optimization  | YES                     | core/query_transformation.py      |
+| Dynamic Intent Routing      | DIR   | Generation / Intent | YES                     | core/retrieval_router.py          |
+| Multi-Turn Persistent Chat  | MTC   | Memory / History    | YES                     | core/conversation_service.py      |
+| Graph RAG                   | G-RAG | Graph Retrieval     | NO                      | Absent from codebase              |
+| RAPTOR                      | RPT   | Tree Summarization  | NO                      | Absent from codebase              |
+
+================================================================================
+END OF MODULE 05: COMPLETE RAG TECHNIQUES INVENTORY
+================================================================================

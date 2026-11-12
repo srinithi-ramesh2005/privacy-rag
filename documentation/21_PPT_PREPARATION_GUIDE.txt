@@ -1,0 +1,145 @@
+================================================================================
+MODULE 21: PRESENTATION DECK (PPT) PREPARATION GUIDE
+================================================================================
+
+1. COMPLETE 30-SLIDE PRESENTATION BLUEPRINT
+--------------------------------------------------------------------------------
+
+SLIDE 1: Title Slide
+  - Title: Secure RAG: A Zero-Trust Cryptographic Document Assistant
+  - Subtitle: Asymmetric Verifiable Retrieval-Augmented Generation with 5-Gate Integrity Proofs
+  - Presenter Notes: "Good morning/afternoon. Today I present Secure RAG, a zero-trust architecture
+    that solves the fundamental privacy and integrity vulnerabilities of modern enterprise RAG systems."
+
+SLIDE 2: Problem Statement: The 5 Vulnerabilities of Standard RAG
+  - Bullet Points:
+      * Plaintext Storage in Vector DBs exposes confidential data at rest.
+      * Zero Tamper Detection: Database poisoning or context injection is completely invisible.
+      * Probabilistic Omission: ANN searches drop mandatory clusters, causing omissions.
+      * Weak Multi-Tenancy: Tag-based filters fail under adversarial prompts.
+      * Unverified Hallucinations: Generative models fabricate ungrounded claims.
+  - Presenter Notes: "Most people assume RAG solves hallucinations, but standard RAG introduces
+    severe security vulnerabilities. Vector databases store raw plaintext, and there is zero
+    cryptographic verification that retrieved context has not been poisoned."
+
+SLIDE 3: Motivation & Real-World Threat Scenarios
+  - Visual: Diagram showing an attacker modifying vector DB entries and poisoning LLM answers.
+  - Speaker Script: "In healthcare, finance, and legal domains, an unverified RAG pipeline can lead
+    to malicious policy alterations, compliance fines, and catastrophic generative errors."
+
+SLIDE 4: Proposed Solution: Zero-Trust Cryptographic RAG
+  - Core Concept: Decoupling vector search from cryptographic verification.
+  - Presenter Notes: "We introduce a 5-Gate Zero-Trust pipeline. Even if the vector database is fully
+    breached, the attacker only sees AES-256-GCM ciphertext, and any altered chunk is blocked by MMR proofs."
+
+SLIDE 5: High-Level System Architecture
+  - Visual: Mermaid multi-tier architecture diagram from Module 03.
+  - Verbal Walkthrough: Explain Client Tier -> FastAPI Verification Gateway -> Qdrant & SQLite Storage.
+
+SLIDE 6: Key Project Contributions
+  - 1. Two-Tier Merkle Mountain Range (MMR) for chunk inclusion proofs.
+  - 2. Dynamic Boundary Verification (DBV) via Voronoi geometry.
+  - 3. Authenticated AEAD payload encryption at rest and in transit.
+  - 4. Hybrid Reranking (RRF + Cross-Encoders + Context Stitching).
+  - 5. ChatGPT-Grade conversational experience with persistent multi-turn SQLite memory.
+
+SLIDE 7: The 5-Gate Security Pipeline Overview
+  - Visual: Linear flowchart showing Gates 1 through 5.
+  - Speaker Script: "Our core innovation is the 5-Gate pipeline: ACL, MMR Integrity, Dynamic Boundary
+    Verification, AEAD Decryption, and Semantic Grounding. If any gate fails, execution halts."
+
+SLIDE 8: Gate 1: Multi-Tenant Role-Based Access Control
+  - Details: PBKDF2 password hashing, tenant canonicalization (`canonicalize_org`), isolated collections.
+  - Failure Mode: HTTP 200 with `ACL_VIOLATION`.
+
+SLIDE 9: Gate 2: Two-Tier Merkle Mountain Range (MMR) Integrity
+  - Visual: Binary tree diagram showing MMR peaks and leaf inclusion proof paths.
+  - Formula: $L_i = \text{SHA-256}(i \mathbin{\|} h_{\text{chunk}} \mathbin{\|} \text{doc\_id})$.
+  - Speaker Script: "Unlike standard Merkle trees, MMR allows append-only updates in $O(\log N)$ time.
+    Every chunk proves its inclusion against an immutable Enterprise Cloud Root."
+
+SLIDE 10: Gate 3: Dynamic Boundary Verification (DBV)
+  - Visual: Voronoi cluster diagram with query vector $\mathbf{q}$ and required cluster radii.
+  - Formula: $\text{Coverage} = \frac{|\text{Retrieved} \cap \text{Required}|}{|\text{Required}|}$.
+  - Speaker Script: "DBV mathematically ensures that the vector database probed all necessary Voronoi cells,
+    preventing omission hallucinations."
+
+SLIDE 11: Gate 4: Authenticated AEAD Decryption (AES-256-GCM)
+  - Details: 256-bit key, unique 12-byte nonce per chunk, 16-byte Galois GMAC tag.
+  - Security Guarantee: Plaintext is only decrypted in transient RAM after Gates 1, 2, and 3 pass.
+
+SLIDE 12: Gate 5: Semantic Grounding & Self-RAG Reflection
+  - Metrics: Token overlap ratio ($\ge 0.35$), `[Is-Relevant]`, `[Fully-Supported]`.
+
+SLIDE 13: Document Ingestion Pipeline (25 Stages)
+  - Walkthrough: PDF -> Extraction -> Semantic Chunking -> Embedding -> IVF Cluster -> AES-GCM -> MMR -> Qdrant.
+
+SLIDE 14: Query Verification Workflow (28 Stages)
+  - Walkthrough: User Prompt -> Intent Router -> Vector Search -> 5 Gates -> Hybrid Reranking -> LLM Synthesis.
+
+SLIDE 15: Advanced RAG Techniques: Hybrid Reranking
+  - Explanation: Reciprocal Rank Fusion ($k=60$) merging dense cosine similarity with Cross-Encoder attention.
+
+SLIDE 16: Advanced RAG Techniques: Context Optimization
+  - Explanation: Lost-in-the-Middle context reordering and intelligent context stitching up to 6,000 chars.
+
+SLIDE 17: Natural Language Instruction Adherence
+  - Capabilities: Multi-lingual (English, Tamil, Thanglish), formatting (tables, lists), tone, negative constraints.
+
+SLIDE 18: Conversational Memory & Persistence
+  - Database: SQLite `conversations` and `conversation_messages`.
+  - Features: Auto-titling, multi-turn pronoun resolution, user identity resolution.
+
+SLIDE 19: User Interface & Experience
+  - Visual: Screenshot/Diagram of ChatGPT-like layout, compact badges (`#1 · Cluster 5`), Security Modal.
+
+SLIDE 20: Performance Engineering & Latency Optimizations
+  - Optimizations: Model pre-warming (18s -> 0.4s), discovery cache, LRU key expansion.
+  - End-to-End Latency: 47.45 ms total time (only 0.04 ms cryptographic overhead!).
+
+SLIDE 21: Evaluation Methodology & Experimental Setup
+  - Dataset: Real enterprise technical PDFs. Models: `bge-small-en-v1.5`, `ms-marco-MiniLM-L-6-v2`, Groq Llama-3.3-70B.
+
+SLIDE 22: Experiment 1: Cryptographic Integrity & Tamper Detection
+  - Results: 500 samples, 100% decryption correctness, 200/200 tampering trials detected (100.0%).
+
+SLIDE 23: Experiment 2: Privacy Leakage & Multi-Tenancy
+  - Results: 0% plaintext exposure, 150/150 unauthorized attempts blocked (100.0% isolation).
+
+SLIDE 24: Experiment 3: Retrieval Quality Comparison
+  - Results: Recall@5 = 1.000, MRR = 0.7333, NDCG@5 = 0.8079 (Zero degradation vs ordinary RAG).
+
+SLIDE 25: Experiment 4: Answer Quality & Hallucination Reduction
+  - Results: Correctness improved from 17.69% (Ordinary) to 42.69% (Privacy RAG), +25.0% accuracy gain.
+
+SLIDE 26: Experiment 5: System Overhead & Scalability
+  - Results: Ordinary = 47.41 ms vs Privacy = 47.45 ms; Throughput = 21.07 QPS; Memory = 582 MB.
+
+SLIDE 27: Security Threat Model & STRIDE Analysis
+  - Matrix showing 13 attack scenarios blocked by the 5 gates.
+
+SLIDE 28: Technical Limitations & Honest Boundaries
+  - Points: Static 256-bit key (KMS planned); CPU-bound cross-encoders; metadata visibility.
+
+SLIDE 29: Future Enhancements & Research Directions
+  - Future Work: Per-tenant KMS key rotation, Fully Homomorphic Encryption (FHE), Knowledge Graph integration.
+
+SLIDE 30: Conclusion & Summary
+  - Takeaway: Secure RAG proves that enterprise cryptographic security, zero-trust integrity, and ChatGPT-grade
+    conversational intelligence can coexist with sub-50ms latency. Thank you!
+
+--------------------------------------------------------------------------------
+2. PRESENTATION TIMING & DEMONSTRATION SCRIPT
+--------------------------------------------------------------------------------
+- Recommended Duration: 15 to 20 minutes (12 mins presentation, 8 mins Q&A / Live Demo).
+- Live Demonstration Sequence:
+    1. Show Dark/Light theme toggle on dashboard (`http://localhost:8000/dashboard`).
+    2. Ask a factual question: "What are the primary evaluation metrics?" -> Show verified answer and compact chips.
+    3. Click top-right "Security Verification" button -> Inspect live green badges for all 5 gates.
+    4. Ask a follow-up in Tamil or requesting a table -> Show multi-turn continuity and format adherence.
+    5. Show left sidebar: Previous conversation preserved, searchable, renamable.
+    6. Demonstrate Gate 2 Failure: Query with `simulate_integrity_failure=true` -> Show instant `MMR_TAMPERED` halt!
+
+================================================================================
+END OF MODULE 21: PRESENTATION DECK (PPT) PREPARATION GUIDE
+================================================================================

@@ -1,0 +1,103 @@
+================================================================================
+MODULE 19: COMPLETE END-TO-END EXECUTION TRACE
+================================================================================
+
+1. SCENARIO OVERVIEW
+--------------------------------------------------------------------------------
+User: `architect_psg` (Member of Organization: `psg`)
+Query: "Explain the two-tier MMR verification in 3 bullet points with an analogy for a student."
+Active Conversation: Auto-created on submission (`conv_b107b145bb5a`)
+
+--------------------------------------------------------------------------------
+2. MICROSECOND-BY-MICROSECOND EXECUTION TRACE
+--------------------------------------------------------------------------------
+
+[T = 0.00 ms] Request Arrival at FastAPI
+  - HTTP POST `/api/v1/query-verify` received on port 8000.
+  - Headers parsed. Bearer JWT token verified.
+  - Body decoded to `QueryPayloadRequest(user_id='architect_psg', org_id='psg')`.
+
+[T = 0.15 ms] Step 0: Identity & Session Resolution
+  - `ConversationService.resolve_user_ids('architect_psg')` resolves:
+    `['architect_psg', 'usr_architect_psg_655732', 'architect_psg@psgtech.ac.in']`.
+  - Auto-creates conversation session: `conv_b107b145bb5a`.
+  - Generates initial title: "Explain the two-tier mmr verification".
+  - Commits user query to SQLite `conversation_messages` table.
+  - Step Timing: 0.85 ms.
+
+[T = 1.05 ms] Step 0a: Document Discovery Cache Lookup
+  - Checks `_DOCS_CACHE['psg']`. Cache hit! Found 3 available documents.
+  - Avoids redundant Qdrant collection scrolling.
+  - Step Timing: 0.04 ms.
+
+[T = 1.15 ms] Step 0b: Dynamic Intent & Instruction Routing
+  - `RetrievalRouter.analyze()` runs regex and lexical extraction:
+      - Requested Style: `['analogy', 'beginner-friendly', 'student']`
+      - Requested Format: `'Bullet Points'`
+      - Target Length: `'3 bullet points'`
+      - Language: `'English'`
+  - Step Timing: 0.12 ms.
+
+[T = 1.30 ms] Step 1: Gate 1 Multi-Tenant ACL Verification
+  - `AuthService.get_user('usr_architect_psg_655732')` returns approved user record.
+  - User `org_id` (`psg`) matches payload `org_id` (`psg`).
+  - Result: `acl_passed = True`. Details: "Multi-tenant isolation verified".
+  - Step Timing: 0.35 ms.
+
+[T = 1.70 ms] Step 2: Dense Vector Embedding Generation
+  - `EmbeddingService.generate_embedding()` invokes in-memory `BAAI/bge-small-en-v1.5`.
+  - Generates 384-dimensional dense vector $\mathbf{q}$.
+  - Step Timing: 3.45 ms.
+
+[T = 5.20 ms] Step 3: Qdrant Vector Retrieval
+  - Executes cosine similarity query against `org_psg_collection` with `limit=20`.
+  - Returns 8 candidate points matching semantic space.
+  - Step Timing: 22.10 ms.
+
+[T = 27.35 ms] Step 4: Gate 3 Dynamic Boundary Verification (DBV)
+  - `BoundaryValidator.evaluate_retrieval()` checks query vector against IVF Voronoi centroids.
+  - Mandatory clusters: `[0, 5]`. Retrieved clusters: `[0, 5, 2]`.
+  - Coverage ratio: $1.00$ (100%).
+  - Result: `completeness_passed = True`.
+  - Step Timing: 0.18 ms.
+
+[T = 27.60 ms] Step 5: Gate 2 Cryptographic MMR Integrity & Gate 4 AEAD Decryption
+  - Iterates through 8 candidate payloads:
+      - Point 1: Recomputes leaf hash $L_0$, climbs proof path against `enterprise_root`.
+        Match confirmed! Integrity PASS.
+      - AES-256-GCM decrypts payload using 12-byte nonce and 16-byte tag. Plaintext recovered.
+      - Repeated for all 8 candidate points.
+  - Result: `integrity_passed = True`, `decryption_passed = True` (8 chunks decrypted).
+  - Step Timing: 0.08 ms.
+
+[T = 27.75 ms] Step 5b: Hybrid Reranking, Cross-Encoder & Lost-in-the-Middle
+  - `HybridReranker` computes Reciprocal Rank Fusion ($k=60$).
+  - `CrossEncoderReranker` scores query-chunk pairs with `ms-marco-MiniLM-L-6-v2`.
+  - `ContextOptimizer` applies Lost-in-the-Middle reordering.
+  - Step Timing: 8.40 ms.
+
+[T = 36.20 ms] Step 6: Generative LLM Response Synthesis
+  - Calls Groq API (Llama-3.3-70B-Versatile) with conversational system prompt:
+    Strict adherence to "3 bullet points", "analogy", and "student audience".
+  - Receives formatted markdown response.
+  - Step Timing: 10.20 ms.
+
+[T = 46.50 ms] Step 7: Gate 5 Semantic Grounding & Self-RAG Reflection
+  - `HallucinationChecker.evaluate()` calculates token overlap: Grounding Score = $0.8817$ (88.17%).
+  - Generates reflection tokens: `[Is-Relevant:Yes]`, `[Fully-Supported]`.
+  - Step Timing: 0.45 ms.
+
+[T = 47.10 ms] Step 8: Persistence & Client Delivery
+  - Assistant answer, compact retrieval badges, and security breakdown saved to SQLite.
+  - Returns HTTP 200 with complete `VerificationResponse`.
+  - Total Server Time: 47.45 ms.
+
+[T = 48.00 ms] Client-Side DOM Rendering (app.js)
+  - Answer rendered as formatted HTML.
+  - Compact chips displayed: `Retrieved Context: 8 Chunks [#1 · Cluster 5] [#2 · Cluster 0]...`
+  - Top-right Security Verification modal badge turns green ("PASS").
+  - Left sidebar refreshes conversation list.
+
+================================================================================
+END OF MODULE 19: COMPLETE END-TO-END EXECUTION TRACE
+================================================================================

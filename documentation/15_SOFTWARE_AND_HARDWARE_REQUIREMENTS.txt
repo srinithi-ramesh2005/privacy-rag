@@ -1,0 +1,59 @@
+================================================================================
+MODULE 15: SOFTWARE & HARDWARE REQUIREMENTS SPECIFICATION
+================================================================================
+
+1. HARDWARE REQUIREMENTS
+--------------------------------------------------------------------------------
+Because local machine learning models are lightweight (`bge-small-en-v1.5` at 133 MB
+and `ms-marco-MiniLM-L-6-v2` at 80 MB), this system runs efficiently on consumer hardware
+without requiring a dedicated GPU.
+
+| Parameter           | Minimum Requirements                   | Recommended Production Specifications   |
+|:--------------------|:---------------------------------------|:----------------------------------------|
+| Processor (CPU)     | 4-Core x86_64 or Apple Silicon (M1+)   | 8-Core Intel Core i7/i9 or AMD Ryzen 7  |
+| Memory (RAM)        | 8 GB RAM                               | 16 GB - 32 GB RAM (for vector caching)  |
+| Storage (Disk)      | 10 GB Available SSD Space              | 25 GB+ NVMe SSD                         |
+| Graphics Card (GPU) | None (Runs 100% on CPU)                | Optional CUDA GPU (4GB VRAM) for batch  |
+| Network             | Broadband internet (> 5 Mbps)          | Low-latency fiber (< 50ms to Groq API)  |
+
+--------------------------------------------------------------------------------
+2. SOFTWARE ENVIRONMENT & RUNTIME REQUIREMENTS
+--------------------------------------------------------------------------------
+
+Operating Systems:
+  - Windows: Windows 10 / Windows 11 (64-bit) with PowerShell 5.1+
+  - Linux: Ubuntu 20.04+, Debian 11+, RHEL 8+, Fedora 38+
+  - macOS: macOS 12.0 (Monterey) or higher (Intel / Apple Silicon)
+
+Core Runtimes:
+  - Python: Python 3.10 to Python 3.13 (64-bit). Verified on Python 3.13.0.
+  - Vector Database: Qdrant Vector Engine v1.7.0+ (Running locally on Docker port 6333 or Qdrant Cloud).
+  - Relational Database: SQLite 3 (Standard Python runtime, storage_data/auth.db).
+  - Web Browser: Any modern ECMAScript 6 browser (Chrome 90+, Edge 90+, Firefox 88+, Safari 15+).
+
+--------------------------------------------------------------------------------
+3. PYTHON PACKAGE DEPENDENCIES & ROLES (requirements.txt)
+--------------------------------------------------------------------------------
+  1. `fastapi` & `uvicorn`       : High-performance asynchronous REST API server and ASGI web runtime.
+  2. `qdrant-client`             : Official vector database client managing collection vectors and payloads.
+  3. `sentence-transformers`     : PyTorch-based neural embedding framework running `bge-small-en-v1.5`.
+  4. `cryptography`              : OpenSSL cryptographic bindings executing NIST AES-256-GCM AEAD ciphers.
+  5. `pydantic` & `settings`     : Strict runtime data validation, schema enforcement, and .env parsing.
+  6. `numpy`, `scipy`, `sklearn` : Fast matrix math, vector normalization, and Voronoi IVF calculations.
+  7. `pypdf`                     : Binary PDF stream parsing and textual character extraction.
+  8. `langchain` & community     : Modular document loading and FlashRank retriever adapter interfaces.
+  9. `flashrank`                 : Ultra-lightweight CPU document reranker and context compressor.
+ 10. `httpx`                     : Asynchronous HTTP networking client for Groq and external APIs.
+ 11. `pyjwt`                     : RFC 7519 JSON Web Token issuance and cryptographic signature verification.
+ 12. `groq`                      : Official SDK for high-speed Llama-3.3-70B conversational LLM synthesis.
+
+--------------------------------------------------------------------------------
+4. NETWORK & PORT ALLOCATION
+--------------------------------------------------------------------------------
+  - Port 8000: FastAPI HTTP Web Dashboard & Verification API (`http://localhost:8000`)
+  - Port 6333: Qdrant REST Vector Database API (`http://localhost:6333`)
+  - Port 6334: Qdrant gRPC Vector Transport (optional high-speed interface)
+
+================================================================================
+END OF MODULE 15: SOFTWARE & HARDWARE REQUIREMENTS
+================================================================================

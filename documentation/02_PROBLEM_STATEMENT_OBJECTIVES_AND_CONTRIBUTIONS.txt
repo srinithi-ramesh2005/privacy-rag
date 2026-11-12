@@ -1,0 +1,90 @@
+================================================================================
+MODULE 02: PROBLEM STATEMENT, OBJECTIVES & CONTRIBUTIONS
+================================================================================
+
+1. THE FIVE CRITICAL VULNERABILITIES OF STANDARD RAG
+--------------------------------------------------------------------------------
+While standard Retrieval-Augmented Generation dramatically reduces LLM hallucinations,
+it operates under dangerous architectural assumptions in enterprise environments:
+
+Vulnerability 1: Plaintext Vector Store Exposure (Data-at-Rest Vulnerability)
+  In ordinary RAG, parsed document chunks are stored as plaintext in the vector database
+  alongside their high-dimensional vector embeddings. If an attacker gains unauthorized access
+  to the vector database (via misconfigured API keys, SQL/NoSQL injection, or infrastructure
+  breach), all confidential corporate memos, proprietary algorithms, financial ledgers, and
+  personally identifiable information (PII) are immediately exfiltrated.
+
+Vulnerability 2: Man-in-the-Middle & Direct DB Tampering (Integrity Vulnerability)
+  Standard RAG systems implicitly trust the results returned by vector searches. If a malicious
+  actor modifies a document chunk in the database or intercepts network packets between the vector
+  store and the LLM synthesizer, they can inject malicious instructions (Prompt Injection via
+  Context) or poison policy documents. The LLM processes this tampered text as ground truth.
+
+Vulnerability 3: Probabilistic Omission & Incomplete Boundaries (Boundary Vulnerability)
+  Approximate Nearest Neighbor (ANN) index partitions (such as Inverted File / IVF or HNSW)
+  cluster vectors to accelerate retrieval. When search parameters are narrow or index nodes
+  drop clusters, critical document chunks that contradict or qualify an assertion are omitted.
+  The LLM generates an authoritative answer unaware that an essential exception was excluded.
+
+Vulnerability 4: Cross-Tenant Information Leakage (Multi-Tenancy Vulnerability)
+  Cloud RAG systems serve multiple organizations or departments. Standard multi-tenancy relies
+  solely on simple metadata tags (e.g. `where: {"org_id": "org1"}`). Software defects or
+  adversarial prompt injections can bypass metadata filters, leaking proprietary data across tenants.
+
+Vulnerability 5: Semantic Disconnect & Unverified Generation (Grounding Vulnerability)
+  Even when retrieval is accurate, generative LLMs frequently hallucinate unsupported facts,
+  fabricate statistics, or cite non-existent document sections when under pressure to generate
+  fluent responses.
+
+2. FORMAL RESEARCH & SYSTEM OBJECTIVES
+--------------------------------------------------------------------------------
+Objective 1 (Cryptographic Confidentiality):
+  Ensure that all document chunks stored in the vector database are encrypted at rest using
+  NIST-standard AES-256-GCM authenticated encryption. The vector database must never store or see
+  plaintext context chunks.
+
+Objective 2 (Cryptographic Integrity & Inclusion Proofs):
+  Guarantee that every retrieved chunk possesses a mathematically verifiable cryptographic proof
+  of inclusion against an immutable Enterprise Cloud Root hash using a Two-Tier Merkle Mountain
+  Range (MMR). Any single-bit tampering must abort generation before synthesis begins.
+
+Objective 3 (Dynamic Geometric Completeness):
+  Formulate a Dynamic Boundary Verification (DBV) algorithm that models the vector embedding
+  space into Voronoi clusters. The system must verify that all mandatory clusters covering the
+  query subspace were probed, preventing omission hallucinations.
+
+Objective 4 (Multi-Tenant Mathematical Isolation):
+  Enforce isolated vector collections and cryptographic role-based access control (RBAC) so that
+  cross-tenant data access is mathematically and architecturally impossible.
+
+Objective 5 (Sub-50ms Production Latency):
+  Deliver these five security gates without degrading user experience, maintaining sub-50ms
+  end-to-end processing and higher answer accuracy than ordinary RAG systems.
+
+3. KEY CONTRIBUTIONS OF THIS PROJECT
+--------------------------------------------------------------------------------
+1. Two-Tier Merkle Mountain Range (MMR) for RAG Integrity:
+   First implementation to apply Two-Tier MMR structures to RAG chunk verification. MMR allows
+   efficient logarithmic-time append and inclusion proof generation ($O(\log N)$), decoupling
+   vector search from data integrity validation.
+
+2. Dynamic Boundary Verification (DBV) Algorithm:
+   Introduced Voronoi cell centroid-and-radius validation to ensure search completeness across
+   vector index partitions.
+
+3. 5-Gate Zero-Trust Security Pipeline:
+   Constructed an integrated 5-gate pipeline that chains ACL verification, MMR proofs, DBV checks,
+   AEAD decryption, and semantic grounding into a fail-closed verification pipeline.
+
+4. Hybrid Reranking with Context Stitching:
+   Developed a production retrieval engine combining Qdrant dense vector search, Reciprocal Rank
+   Fusion (RRF), Cross-Encoder reranking (`ms-marco-MiniLM-L-6-v2`), and Lost-in-the-Middle context
+   reordering.
+
+5. Intelligent ChatGPT-Like Conversational Memory:
+   Built a persistent, multi-turn conversational interface in SQLite that tracks complex natural
+   language instructions, style constraints, negative exclusions, and language preferences.
+
+================================================================================
+END OF MODULE 02: PROBLEM STATEMENT, OBJECTIVES & CONTRIBUTIONS
+================================================================================

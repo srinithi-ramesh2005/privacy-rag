@@ -1,0 +1,58 @@
+================================================================================
+MODULE 18: SECURITY THREAT MODEL & PRIVACY ANALYSIS
+================================================================================
+
+1. STRIDE THREAT MODEL EVALUATION
+--------------------------------------------------------------------------------
+The system was evaluated against the classical STRIDE threat taxonomy:
+
+1. Spoofing Identity (S):
+   - Threat: An attacker impersonates a member of another organization to access documents.
+   - Mitigation: Gate 1 verifies PBKDF2-HMAC-SHA256 password hashes and validates user existence
+     in SQLite. JWT tokens carry cryptographically signed user and tenant claims.
+
+2. Tampering with Data (T):
+   - Threat: Modifying chunk ciphertext or injected prompt in Qdrant vector database.
+   - Mitigation: Gate 2 Two-Tier MMR recalculates Merkle peak paths against Cloud Enterprise Root.
+     Gate 4 AEAD verifies the 16-byte Galois authentication tag. 100% of single-bit flips are caught.
+
+3. Repudiation (R):
+   - Threat: User denies querying sensitive corporate secrets or admin denies approving user.
+   - Mitigation: Persistent SQLite audit logs record `user_id`, timestamps, approval IDs,
+     and conversation turns with complete verification reports.
+
+4. Information Disclosure (I):
+   - Threat: Plaintext document extraction by an attacker with read-only access to vector DB.
+   - Mitigation: Chunks are stored exclusively as AES-256-GCM ciphertexts. The vector DB never
+     receives or stores plaintext.
+
+5. Denial of Service (D):
+   - Threat: Resource exhaustion via complex queries or giant document uploads.
+   - Mitigation: Maximum tokens per chunk enforced (`MAX_TOKENS_PER_CHUNK=2048`); max retrieved chunks
+     capped at 50 (`MAX_CHUNKS_PER_REQUEST=50`); timeout controls on Qdrant and SQLite connections.
+
+6. Elevation of Privilege (E):
+   - Threat: A standard tenant member elevates their role to organization admin.
+   - Mitigation: Role checks enforced at the database level (`role == 'admin'`). Frontend elements
+     are strictly hidden and backend endpoints (`/api/v1/admin/*`) require admin role verification.
+
+--------------------------------------------------------------------------------
+2. EVALUATION OF 13 SPECIFIC ATTACK SCENARIOS
+--------------------------------------------------------------------------------
+1. Read-Only Vector DB Breach: BLOCKED. Ciphertext unreadable without 256-bit AES key.
+2. Cloud Storage Compromise: BLOCKED. Raw blobs are encrypted and hashed.
+3. Ciphertext Bit-Flipping: BLOCKED. Gate 4 throws `InvalidTag` and Gate 2 catches hash mismatch.
+4. Authentication Tag Modification: BLOCKED. Gate 4 GMAC validation fails immediately.
+5. Nonce Manipulation / Replay: BLOCKED. Unique nonces per chunk; tag recalculation fails.
+6. Hash Modification in Payload: BLOCKED. MMR peak bagging does not match immutable Cloud Root.
+7. Merkle Proof Path Tampering: BLOCKED. Peak recomputation yields invalid root.
+8. Cross-Tenant IDOR Attempt: BLOCKED. Gate 1 matches authenticated user org with target collection.
+9. Missing Encryption Key: FAIL-CLOSED. System throws 500 error; unencrypted text is never exposed.
+10. Compromised App Server Memory: PARTIAL VULNERABILITY. Transient plaintext in memory during request.
+11. Stolen User Credentials: USER LEVEL. Attacker accesses only documents permitted to that specific user.
+12. Prompt Injection via Document: BLOCKED. Gate 2 prevents inserting malicious text into indexed files.
+13. Vector Index Omission Attack: BLOCKED. Gate 3 DBV detects missing Voronoi cluster coverage.
+
+================================================================================
+END OF MODULE 18: SECURITY THREAT MODEL & PRIVACY ANALYSIS
+================================================================================

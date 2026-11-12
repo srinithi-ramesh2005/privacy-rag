@@ -1,0 +1,39 @@
+================================================================================
+MODULE 13: CONVERSATIONAL MEMORY & PERSISTENCE ENGINEERING
+================================================================================
+
+1. MULTI-TURN CONVERSATIONAL ARCHITECTURE
+--------------------------------------------------------------------------------
+Secure RAG provides stateful conversational continuity similar to ChatGPT while
+enforcing strict tenant isolation and zero-trust verification on every single turn.
+
+Key Capabilities:
+  1. Persistent Storage in SQLite: Every prompt and answer is committed to `storage_data/auth.db`
+     in `conversation_messages` with millisecond timestamps and audit metadata.
+  2. Auto-Creation on Initial Query: When a user asks a question without selecting an existing chat,
+     `main.py` automatically generates a conversation ID and generates a descriptive title
+     from the query (e.g., "What are the primary evaluation metrics").
+  3. Multi-Turn Pronoun Resolution: Follow-up prompts such as:
+       - "Can you explain that in Tamil?"
+       - "Make it simpler with an analogy"
+       - "Summarize point 2 in 3 bullets"
+     are resolved against preceding turns using `RetrievalRouter.resolve_follow_up_references()`.
+  4. Bidirectional Identity Resolution: `ConversationService.resolve_user_ids()` maps usernames
+     (`architect_psg`), user IDs (`usr_architect_psg_655732`), and emails (`architect_psg@psgtech.ac.in`)
+     so that conversations are never lost regardless of login identifier used.
+  5. Tenant & User Boundary Enforcement: `GET /api/v1/conversations/{id}` queries with
+     `WHERE conversation_id = ? AND user_id IN (...) AND org_id IN (...)`. Cross-tenant chat access
+     returns HTTP 404.
+
+--------------------------------------------------------------------------------
+2. MULTI-TURN PERSISTENT PREFERENCE TRACKING
+--------------------------------------------------------------------------------
+`ConversationService.get_persistent_preferences()` inspects prior user turns to maintain
+established conversational context:
+  - Language: If user previously requested "answer in Tamil", follow-up questions remain in Tamil.
+  - Persona/Style: If user established "explain like I'm a beginner", simplicity is preserved.
+  - Document Context: Retains target `doc_id` referenced in earlier turns when the user says "this document".
+
+================================================================================
+END OF MODULE 13: CONVERSATIONAL MEMORY & PERSISTENCE ENGINEERING
+================================================================================

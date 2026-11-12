@@ -1,0 +1,111 @@
+================================================================================
+MODULE 09: COMPLETE FIVE-GATE SECURITY ARCHITECTURE
+================================================================================
+
+1. THE FIVE-GATE ZERO-TRUST PIPELINE
+--------------------------------------------------------------------------------
+Secure RAG replaces implicit trust with a chain of five fail-closed security gates.
+If any gate fails, the pipeline immediately halts, logs the violation, returns a
+security alert to the client, and never feeds unverified context to the LLM.
+
+```
+Incoming Query (user_id, org_id, query_text)
+                  |
+         [Gate 1: Multi-Tenant ACL] ---------------> FAIL -> HTTP 200 (ACL_VIOLATION)
+                  | PASS
+         [Qdrant ANN Vector Search]
+                  |
+         [Gate 2: Two-Tier MMR Integrity] ---------> FAIL -> HTTP 200 (MMR_TAMPERED)
+                  | PASS
+         [Gate 3: Dynamic Boundary Verif.] --------> FAIL -> HTTP 200 (IVF_BOUNDARY_INCOMPLETE)
+                  | PASS
+         [Gate 4: Authenticated AEAD Decrypt] -----> FAIL -> HTTP 200 (DECRYPTION_FAILED)
+                  | PASS
+         [Hybrid Reranker & Context Assembly]
+                  |
+         [LLM Generative Response Synthesis]
+                  |
+         [Gate 5: Semantic Grounding & Self-RAG] --> FAIL -> Flagged in Audit Breakdown
+                  | PASS
+Verified, Citated & Cryptographically Audited Answer
+```
+
+--------------------------------------------------------------------------------
+2. DETAILED BREAKDOWN OF EACH SECURITY GATE
+--------------------------------------------------------------------------------
+
+GATE 1: MULTI-TENANT ACCESS CONTROL LIST (ACL)
+  - Security Objective: Enforce strict cross-tenant isolation and verify user identity.
+  - Threat Addressed: Unauthorized cross-tenant data access, IDOR attacks, and prompt injection
+    requesting data from other corporate tenants.
+  - Internal Mechanism:
+      1. Receives `user_id` and `org_id` from request.
+      2. Queries SQLite `users` table via `AuthService.get_user()`.
+      3. Verifies user exists, has status `approved`, and that `user.org_id == canonicalize_org(org_id)`.
+      4. If user is a super-admin (`role == 'admin'`), cross-tenant audit access is permitted;
+         for members, cross-tenant access is strictly blocked.
+  - Success Condition: User is authenticated, active, approved, and belongs to target tenant.
+  - Failure Condition: Unknown user, pending approval, rejected account, or org mismatch.
+  - Error Status: `ACL_VIOLATION`.
+  - Code Location: `main.py` lines 1285-1310; `core/auth_service.py`.
+
+GATE 2: TWO-TIER MERKLE MOUNTAIN RANGE (MMR) CRYPTOGRAPHIC INTEGRITY
+  - Security Objective: Verify that retrieved chunks are bit-for-bit identical to ingested documents.
+  - Threat Addressed: Vector database poisoning, man-in-the-middle tampering, unauthorized text modification.
+  - Internal Mechanism:
+      1. For each retrieved chunk, reads `chunk_hash`, `proof_path`, and `enterprise_root`.
+      2. Recomputes leaf hash: $L_i = \text{SHA-256}(\text{index} \mathbin{\|} \text{chunk\_hash} \mathbin{\|} \text{doc\_id})$.
+      3. Climbs the Merkle peak path using sibling hashes stored in `proof_path`.
+      4. Bags the resulting peaks to compute the root: $R^* = \text{BagPeaks}(P_1, \dots, P_m)$.
+      5. Compares $R^*$ with immutable `enterprise_root`.
+  - Success Condition: $R^* == R_{\text{enterprise}}$.
+  - Failure Condition: Any hash mismatch ($R^* \neq R_{\text{enterprise}}$).
+  - Error Status: `MMR_TAMPERED` / `INTEGRITY_CHECK_FAILURE`.
+  - Code Location: `main.py` lines 1450-1510; `mmr/core.py`, `mmr/proof.py`.
+
+GATE 3: DYNAMIC BOUNDARY VERIFICATION (DBV)
+  - Security Objective: Ensure vector search did not omit mandatory index partition clusters.
+  - Threat Addressed: Omission attacks and probabilistic ANN truncation causing incomplete retrieval.
+  - Internal Mechanism:
+      1. Loads pre-computed IVF centroids $\mathbf{c}_k$ and cluster radii $r_k$ from `ivf_centroids.npy` / `ivf_radii.npy`.
+      2. Computes distance between query vector $\mathbf{q}$ and all centroids: $d_k = \|\mathbf{q} - \mathbf{c}_k\|_2$.
+      3. Determines required clusters where $d_k \le r_k + \epsilon$.
+      4. Checks whether the set of retrieved points includes chunks from all required clusters:
+           $$\text{Coverage} = \frac{|\text{Retrieved Clusters} \cap \text{Required Clusters}|}{|\text{Required Clusters}|}$$
+  - Success Condition: $\text{Coverage} \ge 1.0$ (or missing clusters empty).
+  - Failure Condition: Mandatory cluster was not probed ($	ext{Coverage} < 1.0$).
+  - Error Status: `IVF_BOUNDARY_INCOMPLETENESS`.
+  - Code Location: `verification/boundary_validation.py`; `main.py` lines 1420-1445.
+
+GATE 4: AUTHENTICATED AEAD (AES-256-GCM) DECRYPTION
+  - Security Objective: Decrypt ciphertext only after integrity and authorization are established.
+  - Threat Addressed: Unauthorized access to plaintext at rest; bit-flipping attacks on ciphertext.
+  - Internal Mechanism:
+      1. Extracts `nonce` (12 bytes) and `encrypted_content` (Base64 string) from payload.
+      2. Parses 16-byte GMAC authentication tag from end of ciphertext.
+      3. Passes ciphertext, tag, and associated data to AES-256-GCM cipher:
+           $$P = \text{AESGCM}_{K}^{-1}(IV, C, T, AD)$$
+      4. AESGCM mathematically recomputes the Galois Hash ($GHASH$). If tag does not match,
+         decryption throws `InvalidTag` and halts.
+  - Success Condition: Nonce and tag match authenticated ciphertext; plaintext successfully decrypted.
+  - Failure Condition: Corrupted ciphertext, modified tag, incorrect key, or invalid nonce.
+  - Error Status: `DECRYPTION_FAILED`.
+  - Code Location: `crypto/encryption.py`; `main.py` lines 1480-1505.
+
+GATE 5: SEMANTIC GROUNDING & SELF-RAG REFLECTION
+  - Security Objective: Prevent generative hallucinations and verify answer faithfulness.
+  - Threat Addressed: LLM hallucination, ungrounded speculation, fabricated statistics.
+  - Internal Mechanism:
+      1. Computes token-level n-gram overlap between generated answer and decrypted context chunks.
+      2. Calculates mathematical grounding ratio:
+           $$\text{Grounding Score} = \frac{|\text{Tokens}_{\text{answer}} \cap \text{Tokens}_{\text{context}}|}{|\text{Tokens}_{\text{answer}}|}$$
+      3. Minimum threshold: $0.35$ (35%).
+      4. Evaluates Self-RAG reflection tokens: `[Is-Relevant]`, `[Is-Supported]`, `[Is-Useful]`.
+  - Success Condition: Grounding Score $\ge 0.35$ and Self-RAG reflection verified.
+  - Failure Condition: Grounding Score $< 0.35$ (flagged in audit report).
+  - Error Status: `HALLUCINATION_RISK`.
+  - Code Location: `verification/hallucination.py`; `core/corrective_rag.py`; `main.py` lines 1640-1670.
+
+================================================================================
+END OF MODULE 09: FIVE-GATE SECURITY ARCHITECTURE
+================================================================================

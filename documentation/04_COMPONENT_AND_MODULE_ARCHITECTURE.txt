@@ -1,0 +1,73 @@
+================================================================================
+MODULE 04: COMPONENT & MODULE ARCHITECTURE
+================================================================================
+
+1. REPOSITORY DIRECTORY ORGANIZATION
+--------------------------------------------------------------------------------
+The codebase is structured into clear functional domains:
+
+`main.py`:
+  The central application entry point. Implements FastAPI lifecycle hooks (lifespan),
+  pre-warms embedding models, defines API routes, coordinates the 5-Gate Security
+  Verification pipeline in `/api/v1/query-verify`, and serves static dashboard assets.
+
+`config/`:
+  - `settings.py`: Centralized Pydantic BaseSettings management. Loads environment variables
+    from `.env`, controls Qdrant connection parameters, default encryption keys, and LLM flags.
+  - `__init__.py`: Exports configuration singletons.
+
+`core/`:
+  - `auth_service.py`: Multi-tenant user registration, PBKDF2-HMAC-SHA256 password hashing,
+    OTP generation and verification, admin approval workflow, and tenant canonicalization.
+  - `conversation_service.py`: SQLite-backed multi-turn conversation and message history.
+    Handles conversation auto-creation, identity resolution (username vs user_id), search,
+    rename, delete, and preference tracking.
+  - `document_ingestion.py`: PyPDF text extraction, chunking, embedding generation,
+    Voronoi cluster assignment, AES-256-GCM encryption, MMR tree construction, and Qdrant ingestion.
+  - `embedding_service.py`: Singleton wrapper for `BAAI/bge-small-en-v1.5` using SentenceTransformers.
+    Computes 384-dimensional dense vectors with L2 normalization.
+  - `retrieval_router.py`: Natural language intent analyzer. Detects target languages (Tamil,
+    Thanglish, English), formatting requirements (tables, lists), tone, depth, and negative constraints.
+  - `hybrid_reranker.py`: Implements Reciprocal Rank Fusion (RRF), Cross-Encoder scoring, and
+    context stitching across retrieved chunks.
+  - `cross_encoder_reranker.py`: Wraps `cross-encoder/ms-marco-MiniLM-L-6-v2` for cross-attention scoring.
+  - `context_optimizer.py`: Implements Lost-in-the-Middle context reordering to counteract attention degradation.
+  - `corrective_rag.py`: Evaluates retrieval grading (Correct, Ambiguous, Incorrect) and Self-RAG reflection tokens.
+  - `query_transformation.py`: Generates query expansions, sub-queries, and hypothetical document terms.
+  - `langchain_retriever.py`: Bridges Qdrant vector retrieval with LangChain's Flashrank document compressor.
+  - `llm_service.py`: Multi-provider generative synthesis. Calls Groq (Llama-3.3-70b), Gemini, or OpenAI APIs,
+    with an intelligent local fallback synthesizer.
+  - `masking.py`: Preserves privacy during query submission via orthogonal projection and token masking.
+  - `email_service.py`: Dispatches OTP emails and admin approval notifications.
+
+`crypto/`:
+  - `encryption.py`: AES-256-GCM authenticated encryption/decryption with 12-byte random nonces and 16-byte tags.
+  - `hashing.py`: SHA-256 hashing utilities for chunk content, leaf derivation, and Merkle nodes.
+
+`database/`:
+  - `qdrant_client.py`: Manages Qdrant client lifecycle across local Docker, standalone, or cloud instances.
+  - `qdrant_repository.py`: CRUD operations for Qdrant points, collection provisioning, and vector similarity search.
+  - `schemas.py`: Pydantic models for points, document chunks, and verification responses.
+
+`mmr/`:
+  - `core.py`: Mathematical implementation of Merkle Mountain Ranges. Handles leaf hashing, peak bag computation,
+    and root generation.
+  - `cloud_mmr.py`: Cloud-side enterprise MMR tree management and proof extraction.
+  - `user_mmr.py`: Verifier-side inclusion proof recalculation.
+  - `proof.py`: Merkle inclusion proof serialization and verification logic.
+  - `leaf.py`: Data structure defining an MMR leaf node.
+
+`verification/`:
+  - `boundary_validation.py`: Gate 3 Dynamic Boundary Verification (DBV). Loads IVF Voronoi centroids and radii,
+    calculating coverage ratios.
+  - `hallucination.py`: Gate 5 Hallucination Checker. Computes token overlap, NLI grounding ratios, and citation checks.
+
+`static/`:
+  - `index.html`: Main dashboard interface with ChatGPT-style conversation workspace and Security Verification modal.
+  - `app.js`: Frontend controller managing sessions, REST API queries, markdown rendering, and sidebar state.
+  - `styles.css`: Complete styling defining high-contrast Dark Mode and clean ChatGPT-style Light Mode.
+  - `login.html`, `admin.html`, `pending.html`: Auth portal pages for login, OTP verification, and admin approval.
+
+================================================================================
+END OF MODULE 04: COMPONENT & MODULE ARCHITECTURE
+================================================================================

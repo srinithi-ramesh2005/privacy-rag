@@ -1,0 +1,83 @@
+================================================================================
+MODULE 12: BACKEND API & FRONTEND CLIENT SPECIFICATION
+================================================================================
+
+1. FASTAPI REST ENDPOINTS REFERENCE
+--------------------------------------------------------------------------------
+
+A. Query & Security Verification
+  - Endpoint: `POST /api/v1/query-verify`
+  - Purpose: Primary RAG inference and 5-gate cryptographic verifier.
+  - Request Payload (`QueryPayloadRequest`):
+      ```json
+      {
+        "query_text": "How often must VPN credentials be rotated?",
+        "user_id": "architect_psg",
+        "org_id": "psg",
+        "conversation_id": "conv_09d0c78a",
+        "simulate_missing_cluster": false,
+        "simulate_integrity_failure": false,
+        "conversation_history": []
+      }
+      ```
+  - Response Schema (`VerificationResponse`):
+      ```json
+      {
+        "status": "SUCCESS",
+        "answer": "VPN credentials must be rotated every 90 days...",
+        "integrity_verified": true,
+        "acl_verified": true,
+        "decryption_verified": true,
+        "execution_time_ms": 47.45,
+        "conversation_id": "conv_09d0c78a",
+        "retrieval_summary": {
+          "total_chunks": 8,
+          "chunks": [{"chunk_number": 1, "cluster_id": "5"}]
+        },
+        "verification_breakdown": {
+          "acl": {"passed": true, "user_id": "architect_psg"},
+          "integrity": {"passed": true, "details": "MMR proof verified"},
+          "boundary": {"passed": true, "coverage_ratio": 1.0},
+          "decryption": {"passed": true, "chunks_decrypted": 8},
+          "grounding": {"passed": true, "grounding_score": 0.88}
+        }
+      }
+      ```
+
+B. Conversation History Management
+  - `GET /api/v1/conversations?user_id=...&org_id=...&search=...` -> List conversations
+  - `POST /api/v1/conversations` -> Create new conversation session
+  - `GET /api/v1/conversations/{id}?user_id=...&org_id=...` -> Fetch full message history
+  - `PUT /api/v1/conversations/{id}` -> Rename conversation
+  - `DELETE /api/v1/conversations/{id}?user_id=...&org_id=...` -> Delete conversation
+
+C. Authentication & Administration
+  - `POST /api/v1/auth/signup` -> Register new user into unverified status
+  - `POST /api/v1/auth/verify-otp` -> Verify 6-digit email OTP (moves to pending)
+  - `POST /api/v1/auth/login` -> Authenticate and issue JWT Bearer token
+  - `GET /api/v1/admin/pending-users` -> Admin view of pending approval queue
+  - `POST /api/v1/admin/approve-user` -> Admin approval of pending member
+
+D. Ingestion & Document Workbench
+  - `POST /api/v1/ingest` -> Ingest PDF document, encrypt, build MMR, index into Qdrant
+  - `GET /api/v1/documents?org_id=...` -> List indexed documents in tenant organization
+
+--------------------------------------------------------------------------------
+2. FRONTEND ARCHITECTURE & DESIGN (static/app.js & styles.css)
+--------------------------------------------------------------------------------
+- Framework: Pure vanilla JavaScript SPA with CSS custom properties. Zero Node.js build steps.
+- ChatGPT Workspace: Centered chat stream with auto-expanding textarea, smooth scrolling,
+  and quick prompt pills.
+- Left Sidebar: Collapsible navigation listing historical conversations sorted by `updated_at DESC`.
+  Includes live keyword search with debouncing, inline rename (✏️), and delete (🗑️) actions.
+- Compact Retrieval Chips (Requirement 1): Replaces massive raw chunk previews with compact badges
+  `#1 · Cluster 5`, `#2 · Cluster 0` preserving clean chat flow.
+- Top-Right Security Modal (Requirement 2): Dedicated modal inspector that surfaces live audit
+  cards for all five security gates with real-time pass/fail badges, latencies, and Merkle root hashes.
+- Theme System: Instant toggle between polished Dark Mode (`#0b0f17`) and clean ChatGPT-style
+  Light Mode (`#ffffff`, sidebar `#f8fafc`, text `#0f172a`). Inline `<script>` in `<head>` restores
+  theme before first paint to eliminate unstyled flash.
+
+================================================================================
+END OF MODULE 12: BACKEND API & FRONTEND CLIENT SPECIFICATION
+================================================================================

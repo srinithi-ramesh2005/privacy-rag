@@ -1,0 +1,63 @@
+================================================================================
+MODULE 23: LIMITATIONS, FUTURE ENHANCEMENTS & RESEARCH DIRECTIONS
+================================================================================
+
+1. HONEST ARCHITECTURAL LIMITATIONS
+--------------------------------------------------------------------------------
+In accordance with rigorous academic standards, the following limitations of the
+current implementation are acknowledged:
+
+1. Static Master Encryption Key:
+   - Limitation: All tenants currently share a static 256-bit master key defined in `Settings`.
+   - Consequence: An insider with direct backend server root access can decrypt any chunk.
+   - Ideal Solution: Integration with cloud Key Management Services (AWS KMS / HashiCorp Vault)
+     providing distinct per-tenant Key Encryption Keys (KEK).
+
+2. Metadata Visibility:
+   - Limitation: Document IDs, chunk counts, organization IDs, and cluster numbers are stored
+     in plaintext within Qdrant payloads to enable metadata filtering.
+   - Consequence: An attacker reading Qdrant storage can observe document volume and cluster
+     distribution even though chunk text is unreadable.
+
+3. CPU-Bound Cross-Encoder Scaling:
+   - Limitation: Cross-Encoder reranking (`ms-marco-MiniLM-L-6-v2`) runs on CPU.
+   - Consequence: Scoring is fast for top-20 chunks (~8 ms), but scaling to top-200 chunks per
+     query causes latency to exceed 150 ms without a dedicated GPU.
+
+4. Transient Memory Exposure:
+   - Limitation: Plaintext context resides in API server process RAM during synthesis.
+   - Consequence: A memory dump of the active FastAPI process could reveal decrypted chunks.
+
+5. Multimodal Limitations:
+   - Limitation: Images, complex tables, and diagrams in PDFs are currently extracted as
+     surrounding text captions; visual figures are not embedded.
+
+--------------------------------------------------------------------------------
+2. PLANNED FUTURE ENHANCEMENTS & RESEARCH ROADMAP
+--------------------------------------------------------------------------------
+
+A. Per-Tenant KMS Envelope Encryption
+   - Design: Generate a unique ephemeral Data Encryption Key (DEK) for every document.
+   - Implementation: Encrypt document chunks with DEK; encrypt DEK with tenant's KMS master key.
+   - Benefit: Enables instantaneous cryptographic key rotation and cryptographically enforced
+     tenant isolation without re-encrypting vector collections.
+
+B. Hardware-Enforced Trusted Execution Environments (TEEs / Intel SGX)
+   - Design: Execute AES-256-GCM decryption and LLM prompt assembly inside a secure enclave.
+   - Benefit: Protects decrypted context against compromised host OS, hypervisors, and cloud administrators.
+
+C. Fully Homomorphic Encryption (FHE) Vector Search
+   - Design: Compute cosine similarity directly over encrypted vector ciphertexts (e.g., using CKKS scheme).
+   - Current Status: Tested in `eval_module2_encryption.py`; currently exhibits $1,000\times$ latency overhead.
+   - Research Goal: Accelerate FHE vector distance computation to under 100 ms using GPU kernels.
+
+D. Secure Knowledge Graph Fusion (Hybrid Graph RAG)
+   - Design: Integrate an encrypted property graph where entity edges are stored as cryptographic hashes.
+   - Benefit: Adds multi-hop logical deduction without sacrificing Merkle inclusion proof verifiability.
+
+E. Multimodal Vision-Language Grounding
+   - Design: Incorporate ColPali / CLIP vision embeddings to verify chart, diagram, and image fidelity.
+
+================================================================================
+END OF MODULE 23: LIMITATIONS, FUTURE ENHANCEMENTS & RESEARCH DIRECTIONS
+================================================================================
