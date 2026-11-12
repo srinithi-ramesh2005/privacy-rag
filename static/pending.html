@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pending Approval &bull; Privacy RAG</title>
+  <meta name="description" content="Your account registration is verified and awaiting administrator review." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <script>
+    // Immediate auth check: if user's session indicates they are approved, redirect to /dashboard
+    (function() {
+      const sessionStr = localStorage.getItem('rag_session') || localStorage.getItem('rag_verifier_session');
+      if (sessionStr) {
+        try {
+          const sess = JSON.parse(sessionStr);
+          if (sess && (sess.status === 'approved' || sess.role === 'admin')) {
+            window.location.replace('/dashboard');
+          }
+        } catch (e) {}
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --bg-page: #0f141c;
+      --bg-surface: #161d27;
+      --bg-surface-hover: #1c2532;
+      --bg-inset: #0b0f16;
+      --border-color: #232d3d;
+      --border-focus: #3b82f6;
+      --text-primary: #e2e8f0;
+      --text-secondary: #8a99ad;
+      --text-muted: #5a687c;
+      --color-primary: #2563eb;
+      --color-primary-hover: #1d4ed8;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+      --color-danger: #ef4444;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow-card: 0 20px 40px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+      background-image: 
+        radial-gradient(circle at 50% 10%, rgba(245, 158, 11, 0.1) 0px, transparent 65%),
+        radial-gradient(circle at 90% 90%, rgba(37, 99, 235, 0.08) 0px, transparent 45%);
+    }
+
+    .pending-card {
+      width: 100%;
+      max-width: 460px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 42px 36px;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+      position: relative;
+    }
+
+    /* YELLOW PADLOCK / HOURGLASS ICON */
+    .icon-container {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: rgba(245, 158, 11, 0.12);
+      border: 2px solid rgba(245, 158, 11, 0.35);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-warning);
+      margin-bottom: 22px;
+      box-shadow: 0 0 24px rgba(245, 158, 11, 0.25);
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #fbbf24;
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-warning);
+      box-shadow: 0 0 6px var(--color-warning);
+    }
+
+    .headline {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.4;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .message-text {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .email-chip {
+      display: inline-block;
+      font-family: var(--font-mono);
+      background: var(--bg-inset);
+      border: 1px solid var(--border-color);
+      padding: 3px 10px;
+      border-radius: 4px;
+      color: #93c5fd;
+      font-size: 0.84rem;
+      margin: 4px 0 16px 0;
+    }
+
+    .btn-return {
+      width: 100%;
+      background: var(--color-primary);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 12px 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: background-color 0.15s ease, transform 0.05s ease;
+      font-family: inherit;
+    }
+
+    .btn-return:hover {
+      background: var(--color-primary-hover);
+    }
+
+    .btn-return:active {
+      transform: translateY(1px);
+    }
+
+    .btn-check {
+      width: 100%;
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 10px 18px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 10px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn-check:hover {
+      background: var(--bg-surface-hover);
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .status-feedback {
+      margin-top: 16px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      display: none;
+      line-height: 1.45;
+    }
+
+    .footer-note {
+      margin-top: 24px;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+      padding-top: 16px;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+      }
+      50% {
+        transform: scale(1.04);
+        box-shadow: 0 0 30px rgba(245, 158, 11, 0.4);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="pending-card">
+    <!-- YELLOW PADLOCK ICON -->
+    <div class="icon-container">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <circle cx="12" cy="16" r="1"/>
+      </svg>
+    </div>
+
+    <div>
+      <span class="status-badge">
+        <span class="status-dot"></span>
+        Waiting for Approval
+      </span>
+    </div>
+
+    <!-- REQUIRED HEADLINE & TEXT -->
+    <h1 class="headline">Account Verified!</h1>
+    <h2 style="font-size: 0.95rem; font-weight: 500; color: #94a3b8; margin-top: -6px; margin-bottom: 10px;">Email Verified Successfully!</h2>
+    
+    <div id="user-email-display" class="email-chip" style="display: none;"></div>
+
+    <p class="message-text">
+      Account Verified! Your access request is currently pending Administrator review. You will receive access to the RAG platform once approved.
+      <br/><br/>
+      <span style="font-size: 0.84rem; color: var(--text-muted);">Your account is currently pending Administrator approval. You will receive access to the RAG platform once approved.</span>
+    </p>
+
+    <!-- LOGOUT BUTTON (clears localStorage and redirects to /) -->
+    <button type="button" class="btn-return" id="btn-logout" onclick="logoutSession()">
+      <span>Logout</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+
+    <!-- RETURN TO LOGIN BUTTON (links to /) -->
+    <a href="/" class="btn-check" id="btn-return-login" style="margin-top: 10px; text-decoration: none;">
+      <span>Return to Login</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+        <polyline points="10 17 15 12 10 7"/>
+        <line x1="15" y1="12" x2="3" y2="12"/>
+      </svg>
+    </a>
+
+    <!-- CHECK STATUS BUTTON -->
+    <button type="button" class="btn-check" id="btn-check-status" onclick="checkApprovalStatus()">
+      <span>Check Approval Status</span>
+    </button>
+
+    <div id="status-feedback" class="status-feedback"></div>
+
+    <div class="footer-note">
+      Zero-Trust Access Control &bull; Privacy-Preserving Document Retrieval
+    </div>
+  </div>
+
+  <script>
+    const userEmail = localStorage.getItem('pending_email') || localStorage.getItem('rag_pending_email') || '';
+    const emailChip = document.getElementById('user-email-display');
+    const feedback = document.getElementById('status-feedback');
+
+    if (userEmail) {
+      emailChip.textContent = userEmail;
+      emailChip.style.display = 'inline-block';
+    }
+
+    function logoutSession() {
+      localStorage.clear();
+      window.location.href = '/';
+    }
+
+    // Check if token exists and indicates approval
+    function checkExistingApproval() {
+      const sessionStr = localStorage.getItem('rag_session') || localStorage.getItem('rag_verifier_session');
+      if (sessionStr) {
+        try {
+          const sess = JSON.parse(sessionStr);
+          if (sess && (sess.status === 'approved' || sess.role === 'admin')) {
+            window.location.replace('/dashboard');
+            return true;
+          }
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    async function checkApprovalStatus() {
+      if (!userEmail) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+        feedback.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        feedback.style.color = '#f87171';
+        feedback.textContent = 'No email found in session. Please return to login.';
+        return;
+      }
+
+      const btn = document.getElementById('btn-check-status');
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+
+      try {
+        const res = await fetch(`/api/v1/auth/status?email=${encodeURIComponent(userEmail)}`);
+        const data = await res.json();
+
+        if (res.ok && data.user) {
+          const status = (data.user.status || '').toLowerCase();
+          feedback.style.display = 'block';
+
+          if (status === 'approved') {
+            feedback.style.background = 'rgba(16, 185, 129, 0.15)';
+            feedback.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+            feedback.style.color = '#34d399';
+            feedback.innerHTML = '🎉 <strong>Account Approved!</strong> Redirecting to login...';
+            setTimeout(() => {
+              window.location.href = `/?email=${encodeURIComponent(userEmail)}`;
+            }, 1200);
+          } else if (status === 'rejected') {
+            feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+            feedback.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+            feedback.style.color = '#f87171';
+            feedback.textContent = 'Your account registration was not approved by the administrator.';
+          } else {
+            feedback.style.background = 'rgba(245, 158, 11, 0.15)';
+            feedback.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+            feedback.style.color = '#fbbf24';
+            feedback.textContent = 'Status: Still awaiting Administrator review. Please check back shortly.';
+          }
+        } else {
+          feedback.style.display = 'block';
+          feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+          feedback.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+          feedback.style.color = '#f87171';
+          feedback.textContent = 'Could not retrieve account status. Please try again.';
+        }
+      } catch (err) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+        feedback.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        feedback.style.color = '#f87171';
+        feedback.textContent = 'Network error checking status.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Check Approval Status';
+      }
+    }
+
+    // Run check on load
+    window.addEventListener('DOMContentLoaded', () => {
+      checkExistingApproval();
+    });
+  </script>
+</body>
+</html>
+
