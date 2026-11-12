@@ -1,0 +1,149 @@
+{
+  "metadata": {
+    "timestamp": "2026-10-29 02:56:49",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "cipher_algorithm": "AES-256-GCM",
+    "vector_dimension": 384,
+    "qdrant_status": "connected"
+  },
+  "experiment_1_encryption_integrity": {
+    "n_samples": 500,
+    "decryption_correctness_pct": 100.0,
+    "mean_enc_time_ms": 0.0188,
+    "p95_enc_time_ms": 0.0305,
+    "mean_dec_time_ms": 0.0104,
+    "p95_dec_time_ms": 0.0221,
+    "total_plaintext_bytes": 136750,
+    "total_ciphertext_bytes": 144750,
+    "storage_overhead_raw_pct": 5.85,
+    "storage_overhead_b64_pct": 47.42,
+    "tampering_trials": 200,
+    "tampering_detected": 200,
+    "tampering_detection_rate_pct": 100.0
+  },
+  "experiment_2_privacy_leakage": {
+    "inspected_points": 21,
+    "plaintext_chunks_found": 0,
+    "plaintext_exposure_pct": 0.0,
+    "unauthorized_attempts": 150,
+    "unauthorized_success": 0,
+    "unauthorized_decryption_rate_pct": 0.0,
+    "tampering_trials": 100,
+    "tampering_rejected": 100,
+    "tampering_rejection_rate_pct": 100.0,
+    "embedding_inversion_exact_recovery_pct": 0.0,
+    "embedding_top_semantic_inferences": [
+      "aes-256-gcm",
+      "zero-trust",
+      "encryption",
+      "security",
+      "confidential"
+    ],
+    "visible_metadata_fields": [
+      "chunk_hash",
+      "chunk_id",
+      "chunk_index",
+      "cluster_id",
+      "doc_id",
+      "encrypted_content",
+      "enterprise_root",
+      "leaf_hash",
+      "metadata",
+      "nonce",
+      "org_id",
+      "proof_path",
+      "user_id"
+    ]
+  },
+  "experiment_3_retrieval_quality": {
+    "baseline": {
+      "recall_at_5": 1.0,
+      "precision_at_5": 0.26,
+      "mrr": 0.7333,
+      "ndcg_at_5": 0.8079
+    },
+    "privacy": {
+      "recall_at_5": 1.0,
+      "precision_at_5": 0.26,
+      "mrr": 0.7333,
+      "ndcg_at_5": 0.8079
+    },
+    "difference": {
+      "recall_at_5": 0.0,
+      "precision_at_5": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0
+    }
+  },
+  "experiment_4_answer_quality": {
+    "ordinary_rag": {
+      "answer_correctness_pct": 17.69,
+      "faithfulness_score": 0.879,
+      "context_relevance_score": 1.0,
+      "answer_completeness_score": 0.6192,
+      "unauthorized_disclosures": 1
+    },
+    "privacy_rag": {
+      "answer_correctness_pct": 42.69,
+      "faithfulness_score": 0.889,
+      "context_relevance_score": 1.0,
+      "answer_completeness_score": 0.8067,
+      "unauthorized_disclosures": 0
+    },
+    "difference": {
+      "answer_correctness_pct": 25.0,
+      "faithfulness_score": 0.01,
+      "context_relevance_score": 0.0,
+      "answer_completeness_score": 0.1875,
+      "unauthorized_disclosures_prevented": 1
+    }
+  },
+  "experiment_5_overhead": {
+    "stages": {
+      "stage_1_chunking_ms_per_doc": 0.003,
+      "stage_2_encryption_ms_per_chunk": 0.0131,
+      "stage_3_indexing_time_sec": 1.975,
+      "stage_4_vector_search_ms_per_query": 27.714,
+      "stage_5_decryption_ms_per_query": 0.0396,
+      "stage_6_llm_generation_ms_per_query": 19.7
+    },
+    "comparison": {
+      "indexing_time_s": {
+        "ordinary_rag": 1.98,
+        "privacy_rag": 1.98
+      },
+      "encryption_time_ms_per_chunk": {
+        "ordinary_rag": 0.0,
+        "privacy_rag": 0.0131
+      },
+      "decryption_time_ms_per_query": {
+        "ordinary_rag": 0.0,
+        "privacy_rag": 0.0396
+      },
+      "mean_retrieval_latency_ms": {
+        "ordinary_rag": 27.71,
+        "privacy_rag": 27.71
+      },
+      "mean_end_to_end_latency_ms": {
+        "ordinary_rag": 47.41,
+        "privacy_rag": 47.45
+      },
+      "p95_end_to_end_latency_ms": {
+        "ordinary_rag": 70.13,
+        "privacy_rag": 70.17
+      },
+      "throughput_queries_per_sec": {
+        "ordinary_rag": 21.09,
+        "privacy_rag": 21.07
+      },
+      "total_storage_mb": {
+        "ordinary_rag": 0.1613,
+        "privacy_rag": 0.1721
+      },
+      "peak_memory_mb": {
+        "ordinary_rag": 581.13,
+        "privacy_rag": 582.38
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+    "fixed_length": {
+        "chunk_count": 6,
+        "size_variance_stdev": 23.31,
+        "boundary_fragmentation_rate_pct": 16.67,
+        "semantic_cohesion": 0.2952
+    },
+    "semantic": {
+        "chunk_count": 6,
+        "size_variance_stdev": 21.78,
+        "boundary_fragmentation_rate_pct": 16.67,
+        "semantic_cohesion": 0.3298
+    }
+}

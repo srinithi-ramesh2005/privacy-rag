@@ -1,0 +1,33 @@
+{
+    "confusion_matrix": {
+        "TP": 0,
+        "FP": 1,
+        "FN": 3,
+        "TN": 0
+    },
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0,
+    "hit_rate_at_5": 0.0,
+    "mrr": 0.0,
+    "ndcg": 0.0,
+    "abstention_rate": 0.0,
+    "details": [
+        {
+            "query": "How often must VPN credentials be rotated?",
+            "result": "False Negative"
+        },
+        {
+            "query": "What is the purpose of the Zero-Trust Verifiable RAG Engine?",
+            "result": "False Negative"
+        },
+        {
+            "query": "What happens if a temperature deviation exceeds 2C?",
+            "result": "False Negative"
+        },
+        {
+            "query": "What is the capital of France?",
+            "result": "False Positive (Failed Abstention)"
+        }
+    ]
+}

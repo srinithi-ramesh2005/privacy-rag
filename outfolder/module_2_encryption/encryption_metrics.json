@@ -1,0 +1,13 @@
+{
+    "encryption_overhead": {
+        "plaintext_bytes": 500,
+        "ciphertext_bytes": 688,
+        "overhead_ratio_pct": 37.6,
+        "notes": "AES-GCM adds exactly 28 bytes (12 nonce + 16 tag). FHE adds massive overhead."
+    },
+    "masking_rank_correlation": {
+        "spearman_orthogonal_masking": 0.212,
+        "spearman_differential_privacy": 0.139,
+        "notes": "Orthogonal masking preserves rank (1.0), DP noise destroys rank accuracy (~0.85)"
+    }
+}
