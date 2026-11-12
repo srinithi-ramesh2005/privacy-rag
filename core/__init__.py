@@ -1,0 +1,1 @@
+"""Core service package: embeddings, masking, ingestion, auth, LLM, retrieval, and RAG helpers."""
